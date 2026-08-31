@@ -77,56 +77,107 @@ function cellText(rowItems,bound){
   }).sort((a,b)=>Math.abs(b.y-a.y)>2?b.y-a.y:a.x-b.x).map(i=>i.text).join(""));
 }
 function parsePage(items,pageNo){
-  const cols=headerColumns(items);
-  if(!Number.isFinite(cols.no)||!Number.isFinite(cols.university)||!Number.isFinite(cols.department)){
-    return [];
-  }
+  if(!items.length) return [];
 
-  // Missing narrow left-side headers are recovered from the visual order of this fixed report.
-  const ux=cols.university, dx=cols.department;
-  const unit=dx-ux;
-  cols.studentName ??= ux-unit*4.02;
-  cols.studentNo ??= ux-unit*4.72;
-  cols.classNo ??= ux-unit*5.22;
-  cols.grade ??= ux-unit*5.72;
-  cols.admissionType ??= dx+unit*5.55;
-  cols.admissionDetail ??= dx+unit*6.72;
+  /*
+    관심대학 리스트 고정 양식 전용.
+    기존 버전은 헤더의 글자 위치를 역산했는데, 이 PDF는 '번호'처럼
+    헤더가 여러 텍스트 조각으로 나뉘어 있어 열 위치 계산이 틀어질 수 있었다.
+    v2.1부터는 실제 보고서의 고정 열 비율을 사용한다.
+  */
+  const minX=Math.min(...items.map(i=>i.x));
+  const maxX=Math.max(...items.map(i=>i.x+(i.w||0)));
+  const width=Math.max(1,maxX-minX);
+  const rx=(it)=>((it.x+(it.w||0)/2)-minX)/width;
 
-  const bounds=makeBoundaries(cols);
-  const noX=cols.no;
+  // 행의 No는 표의 가장 왼쪽 열에 있다.
   const markers=items.filter(i=>{
-    const cx=i.x+i.w/2;
-    return Math.abs(cx-noX)<12 && /^(?:[1-9]|1\d|20)$/.test(i.text);
+    const t=String(i.text||"").trim();
+    return /^(?:[1-9]|1\d|20)$/.test(t) && rx(i)<0.035;
   }).sort((a,b)=>b.y-a.y);
 
-  if(!markers.length)return [];
+  if(!markers.length) return [];
+
+  // 실제 업로드된 '관심대학 리스트'의 열 경계 비율
+  const B={
+    grade:[0.025,0.045],
+    classNo:[0.045,0.064],
+    studentNo:[0.064,0.086],
+    studentName:[0.086,0.145],
+    university:[0.235,0.325],
+    department:[0.325,0.420],
+    admissionType:[0.525,0.600],
+    admissionDetail:[0.600,0.690]
+  };
+
+  const getCell=(rowItems,b)=>{
+    const picked=rowItems.filter(it=>{
+      const x=rx(it);
+      return x>=b[0] && x<b[1];
+    }).sort((a,b)=>{
+      if(Math.abs(b.y-a.y)>2) return b.y-a.y;
+      return a.x-b.x;
+    });
+    return cleanCell(picked.map(i=>i.text).join(""));
+  };
+
   const parsed=[];
   for(let i=0;i<markers.length;i++){
     const y=markers[i].y;
-    const upper=i===0?y+18:(markers[i-1].y+y)/2;
-    const lower=i===markers.length-1?y-18:(y+markers[i+1].y)/2;
-    const rowItems=items.filter(it=>it.y<upper&&it.y>=lower);
+    const upper=i===0 ? y+18 : (markers[i-1].y+y)/2;
+    const lower=i===markers.length-1 ? y-18 : (y+markers[i+1].y)/2;
+    const rowItems=items.filter(it=>it.y<upper && it.y>=lower);
 
-    const r={
+    let r={
       pageNo,
       no:Number(markers[i].text),
-      grade:cellText(rowItems,bounds.grade),
-      classNo:cellText(rowItems,bounds.classNo),
-      studentNo:cellText(rowItems,bounds.studentNo),
-      studentName:cellText(rowItems,bounds.studentName),
-      university:cellText(rowItems,bounds.university),
-      department:cellText(rowItems,bounds.department),
-      admissionType:cellText(rowItems,bounds.admissionType),
-      admissionDetail:cellText(rowItems,bounds.admissionDetail)
+      grade:getCell(rowItems,B.grade),
+      classNo:getCell(rowItems,B.classNo),
+      studentNo:getCell(rowItems,B.studentNo),
+      studentName:getCell(rowItems,B.studentName),
+      university:getCell(rowItems,B.university),
+      department:getCell(rowItems,B.department),
+      admissionType:getCell(rowItems,B.admissionType),
+      admissionDetail:getCell(rowItems,B.admissionDetail)
     };
 
-    // 학생 정보는 학년 3 / 반 1~9 / 번호 1~40 / 한글 이름 형태로 검증
-    const validIdentity=/^3$/.test(r.grade)&&/^[1-9]$/.test(r.classNo)&&/^\d{1,2}$/.test(r.studentNo)&&/^[가-힣]{2,5}$/.test(r.studentName);
-    const validUniversity=r.university.length>=2;
-    if(validIdentity&&validUniversity) parsed.push(r);
+    // 숫자칸에 불필요한 조각이 섞인 경우 숫자만 복구
+    r.grade=(r.grade.match(/[1-3]/)||[])[0]||"";
+    r.classNo=(r.classNo.match(/[1-9]/)||[])[0]||"";
+    r.studentNo=(r.studentNo.match(/\d{1,2}/)||[])[0]||"";
+
+    // 이름 칸에는 보통 한글 이름 + 다른 칸의 경계문자가 섞일 수 있어 한글 이름만 취한다.
+    const nm=r.studentName.match(/[가-힣]{2,5}/);
+    r.studentName=nm?nm[0]:"";
+
+    // 대학명은 줄바꿈 때문에 '가톨릭관동대'+'학교(강릉)'처럼 분리된다.
+    r.university=r.university
+      .replace(/학교(?=\()/g,"학교")
+      .replace(/\s+/g,"")
+      .trim();
+
+    // 일부 행에서 대학/모집단위 열 경계가 글자 폭 때문에 약간 넘어오는 것을 보정
+    if(r.university.length<2){
+      const candidates=rowItems
+        .filter(it=>rx(it)>=0.20 && rx(it)<0.36)
+        .sort((a,b)=>Math.abs(b.y-a.y)>2?b.y-a.y:a.x-b.x)
+        .map(i=>i.text).join("");
+      r.university=cleanCell(candidates);
+    }
+
+    const validIdentity=r.grade==="3" &&
+      /^[1-9]$/.test(r.classNo) &&
+      /^\d{1,2}$/.test(r.studentNo) &&
+      /^[가-힣]{2,5}$/.test(r.studentName);
+
+    if(validIdentity && r.university.length>=2){
+      parsed.push(r);
+    }
   }
+
   return parsed;
 }
+
 function detectTimestamp(pages){
   const txt=pages.slice(0,2).flat().map(x=>x.text).join(" ");
   const m=txt.match(/(20\d{2})[-/.](\d{2})[-/.](\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
@@ -182,7 +233,8 @@ async function handleFile(file){
   try{
     const pages=await extractItems(file);
     const parsed=dedupeRows(pages.flatMap((items,i)=>parsePage(items,i+1)));
-    if(!parsed.length)throw new Error("표의 학생 지원정보를 인식하지 못했습니다.");
+    if(!parsed.length)throw new Error("표를 읽었지만 학생 행을 찾지 못했습니다. 수정용 v2.1 파일인지 확인해 주세요.");
+    if(parsed.length<10)throw new Error(`학생 지원정보가 ${parsed.length}건만 인식되었습니다. 화면을 캡처해 보내주세요.`);
 
     previousSnapshot=loadPrevious();
     rows=parsed;
