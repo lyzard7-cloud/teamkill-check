@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>수시 팀킬 방지 시스템</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="eyebrow">강일여고 3학년</div>
+    <h1>수시 팀킬 방지 시스템</h1>
+    <p>대입상담프로그램의 '관심대학 리스트' PDF 한 파일만 올리면 학년 전체 중복을 자동 탐지합니다.</p>
+  </div>
+  <button id="resetBtn" class="ghost danger-outline" type="button">저장된 비교자료 초기화</button>
+</header>
+
+<main class="container">
+  <section class="upload-card">
+    <div id="dropZone" class="drop-zone" tabindex="0">
+      <div class="drop-icon">PDF</div>
+      <strong>관심대학 리스트 PDF를 올려주세요</strong>
+      <span>3학년 전체 목록 PDF 1개를 최신본으로 다시 올리면 됩니다.</span>
+      <button id="chooseBtn" class="primary" type="button">PDF 파일 선택</button>
+      <input id="fileInput" type="file" accept=".pdf,application/pdf" hidden>
+    </div>
+    <div class="privacy-note">PDF는 브라우저 안에서만 읽습니다. 분석 결과만 이 브라우저에 저장되어 이전 결과와 비교됩니다.</div>
+  </section>
+
+  <section id="summarySection" class="hidden">
+    <div class="snapshot-bar">
+      <div>
+        <span>현재 분석본</span>
+        <strong id="snapshotLabel">-</strong>
+      </div>
+      <div id="previousInfo" class="previous-info">이전 비교자료 없음</div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="summary-card"><span>분석 학생</span><strong id="studentCount">0</strong><small>명</small></div>
+      <div class="summary-card"><span>관심대학 항목</span><strong id="rowCount">0</strong><small>건</small></div>
+      <button id="newCard" class="summary-card clickable new-card"><span>새로 발생한 팀킬</span><strong id="newCount">0</strong><small>그룹</small></button>
+      <button id="exactCard" class="summary-card clickable danger-card"><span>현재 완전 중복</span><strong id="exactCount">0</strong><small>그룹</small></button>
+      <button id="deptCard" class="summary-card clickable warning-card"><span>현재 대학·학과 중복</span><strong id="deptCount">0</strong><small>그룹</small></button>
+    </div>
+
+    <section id="changeSection" class="change-panel hidden">
+      <div class="section-head">
+        <div><span class="eyebrow">이전 PDF 대비 변화</span><h2>팀킬 변화</h2></div>
+      </div>
+      <div class="change-grid">
+        <button class="change-card new-change" data-change="new"><span>새로 발생</span><strong id="changeNewCount">0</strong></button>
+        <button class="change-card stable-change" data-change="stable"><span>계속 중복</span><strong id="changeStableCount">0</strong></button>
+        <button class="change-card solved-change" data-change="solved"><span>해소됨</span><strong id="changeSolvedCount">0</strong></button>
+      </div>
+      <div id="changeList" class="duplicate-list"></div>
+    </section>
+
+    <div class="toolbar">
+      <div class="tabs">
+        <button class="tab active" data-view="exact">완전 중복</button>
+        <button class="tab" data-view="department">대학·학과 중복</button>
+        <button class="tab" data-view="all">전체 추출자료</button>
+      </div>
+      <div class="toolbar-actions">
+        <button id="editModeBtn" class="ghost">추출자료 수정</button>
+        <button id="exportBtn" class="ghost">CSV 내보내기</button>
+      </div>
+    </div>
+
+    <section id="duplicateSection"><div id="duplicateList" class="duplicate-list"></div></section>
+    <section id="allRowsSection" class="hidden">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>학번</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형유형</th><th>세부유형</th></tr></thead>
+          <tbody id="rowsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <section id="emptyState" class="empty-state">
+    아직 분석한 관심대학 리스트 PDF가 없습니다.
+  </section>
+</main>
+
+<div id="progressModal" class="modal-backdrop hidden">
+  <div class="modal-card progress-card">
+    <div class="spinner"></div>
+    <strong id="progressTitle">PDF 분석 중...</strong>
+    <p id="progressText">표의 행을 읽고 있습니다.</p>
+  </div>
+</div>
+
+<div id="editModal" class="modal-backdrop hidden">
+  <div class="modal-card edit-card">
+    <div class="modal-head">
+      <div><div class="eyebrow">자동 추출 검토</div><h2>추출자료 수정</h2><p>잘못 인식된 행만 수정하거나 삭제할 수 있습니다.</p></div>
+      <button id="editCloseBtn" class="ghost">닫기</button>
+    </div>
+    <div id="editRows" class="edit-rows"></div>
+    <div class="modal-actions">
+      <button id="editCancelBtn" class="ghost">취소</button>
+      <button id="editSaveBtn" class="primary">수정내용 반영</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
