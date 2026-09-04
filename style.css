@@ -79,3 +79,29 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 }
 .student-search-label{min-width:220px}.student-search-label input{width:220px}
 @media(max-width:800px){.student-search-label,.student-search-label input{width:100%;min-width:0}}
+
+/* v3.3 중복 학생 옆 내신등급 표시 */
+.person-main{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.grade-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid #bfd2ee;
+  background:#edf4ff;
+  color:#315f99;
+  font-size:10px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.grade-badge.grade-missing{
+  border-color:#e3d9c5;
+  background:#fff8eb;
+  color:#896f40;
+}

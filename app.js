@@ -494,7 +494,23 @@ function render(){
 }
 function renderPeople(g){
   const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
-  return unique.map(r=>`<div class="person"><strong>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")} · ${r.studentName}`)}</strong><span>${esc(r.university)} / ${esc(r.department)} / ${esc(r.admissionType)} / ${esc(r.admissionDetail)}</span></div>`).join("");
+  const gm=gradeMap();
+
+  return unique.map(r=>{
+    const gi=r.gradeInfo || gm.get(studentKey(r));
+    const gradeValue=Number(gi?.gradeValue);
+    const gradeBadge=Number.isFinite(gradeValue)
+      ? `<span class="grade-badge">내신 ${gradeValue.toFixed(2)}</span>`
+      : `<span class="grade-badge grade-missing">내신 미연결</span>`;
+
+    return `<div class="person">
+      <div class="person-main">
+        <strong>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")} · ${r.studentName}`)}</strong>
+        ${gradeBadge}
+      </div>
+      <span>${esc(r.university)} / ${esc(r.department)} / ${esc(r.admissionType)} / ${esc(r.admissionDetail)}</span>
+    </div>`;
+  }).join("");
 }
 function renderDuplicates(){
   const groups=currentView==="exact"?exactGroups():deptGroups(), host=$("#duplicateList");
