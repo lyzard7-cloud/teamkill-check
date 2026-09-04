@@ -5,7 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 
 const STORAGE_KEY="gangil-teamkill-interestlist-v2";
 let rows=[], gradeRows=[], currentView="exact", editDraft=[], currentSnapshotLabel="", previousSnapshot=null;
-let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null, classFilterMode="all", studentSearchText="";
+let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null, classFilterMode="all", studentSearchText="", supportTypeMode="all", universitySearchText="";
 let changeMode="new";
 
 function toast(msg){const e=$("#toast");e.textContent=msg;e.classList.remove("hidden");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.add("hidden"),2400)}
@@ -19,17 +19,24 @@ function gradeStudentKey(r){return `${r.grade}-${r.classNo}-${r.studentNo}-${nor
 function gradeMap(){return new Map(gradeRows.map(r=>[gradeStudentKey(r),r]))}
 function matchedRows(){const gm=gradeMap();return rows.map(r=>({...r,gradeInfo:gm.get(studentKey(r))||null}))}
 function activeRows(){
+  const filterCommon=r=>{
+    if(classFilterMode!=="all" && String(r.classNo)!==String(classFilterMode)) return false;
+
+    const q=norm(studentSearchText);
+    if(q){
+      const schoolNo=`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`;
+      const hay=norm(`${r.studentName} ${schoolNo} ${r.classNo}반 ${r.studentNo}번`);
+      if(!hay.includes(q)) return false;
+    }
+
+    if(supportTypeMode!=="all" && supportCategory(r)!==supportTypeMode) return false;
+    if(!universityMatches(r)) return false;
+
+    return true;
+  };
+
   if(!gradeRows.length){
-    return rows.filter(r=>{
-      if(classFilterMode!=="all" && String(r.classNo)!==String(classFilterMode)) return false;
-      const q=norm(studentSearchText);
-      if(q){
-        const schoolNo=`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`;
-        const hay=norm(`${r.studentName} ${schoolNo} ${r.classNo}반 ${r.studentNo}번`);
-        if(!hay.includes(q)) return false;
-      }
-      return true;
-    });
+    return rows.filter(filterCommon);
   }
 
   return matchedRows().filter(r=>{
@@ -46,21 +53,26 @@ function activeRows(){
       const n=Number(gradeFilterMode);
       gradeOk=g>=n&&g<n+1;
     }
-    if(!gradeOk) return false;
 
-    if(classFilterMode!=="all" && String(r.classNo)!==String(classFilterMode)) return false;
-
-    const q=norm(studentSearchText);
-    if(q){
-      const schoolNo=`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`;
-      const hay=norm(`${r.studentName} ${schoolNo} ${r.classNo}반 ${r.studentNo}번`);
-      if(!hay.includes(q)) return false;
-    }
-    return true;
+    return gradeOk && filterCommon(r);
   });
 }
 function exactKey(r){return [norm(r.university),norm(r.department),norm(r.admissionType),norm(r.admissionDetail)].join("|")}
 function deptKey(r){return [norm(r.university),norm(r.department)].join("|")}
+
+function supportCategory(r){
+  const t=norm(`${r.admissionType||""} ${r.admissionDetail||""}`);
+  if(t.includes("종합")) return "jonghap";
+  if(t.includes("교과")) return "gyogwa";
+  return "other";
+}
+function universityMatches(r){
+  const q=norm(universitySearchText);
+  if(!q) return true;
+  const u=norm(r.university||"");
+  return u.includes(q) || q.includes(u);
+}
+
 
 async function extractItems(file){
   const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
@@ -404,19 +416,51 @@ function exactGroups(list=activeRows()){return groupBy(exactKey,list)}
 function deptGroups(list=activeRows()){
   return groupBy(deptKey,list).filter(([k,g])=>new Set(g.map(exactKey)).size>1);
 }
-function groupSignature(g){
-  const keys=[...new Set(g.map(studentKey))].sort();
-  return `${exactKey(g[0])}::${keys.join(",")}`;
+function duplicateKeyFromGroup(g){
+  return g?.length ? exactKey(g[0]) : "";
+}
+function studentSet(g){
+  return new Set((g||[]).map(studentKey));
+}
+function sameSet(a,b){
+  if(a.size!==b.size)return false;
+  for(const x of a)if(!b.has(x))return false;
+  return true;
 }
 function computeChanges(){
-  if(!previousSnapshot)return {new:[],stable:[],solved:[]};
-  const now=exactGroups(rows), prev=exactGroups(previousSnapshot.rows||[]);
-  const nowMap=new Map(now.map(([,g])=>[groupSignature(g),g]));
-  const prevMap=new Map(prev.map(([,g])=>[groupSignature(g),g]));
-  const n=[],s=[],d=[];
-  for(const [k,g] of nowMap)(prevMap.has(k)?s:n).push(g);
-  for(const [k,g] of prevMap)if(!nowMap.has(k))d.push(g);
-  return {new:n,stable:s,solved:d};
+  if(!previousSnapshot)return {new:[],changed:[],stable:[],solved:[]};
+
+  // 비교는 지원 조합 자체(대학+학과+전형)를 기준으로 한다.
+  // 학생 구성만 달라진 경우에는 신규+해소가 아니라 '인원 변동'으로 분류한다.
+  const now=exactGroups(rows);
+  const prev=exactGroups(previousSnapshot.rows||[]);
+
+  const nowMap=new Map(now.map(([,g])=>[duplicateKeyFromGroup(g),g]));
+  const prevMap=new Map(prev.map(([,g])=>[duplicateKeyFromGroup(g),g]));
+
+  const result={new:[],changed:[],stable:[],solved:[]};
+
+  for(const [key,g] of nowMap){
+    if(!prevMap.has(key)){
+      result.new.push(g);
+      continue;
+    }
+    const pg=prevMap.get(key);
+    const ns=studentSet(g), ps=studentSet(pg);
+
+    if(sameSet(ns,ps)){
+      result.stable.push(g);
+    }else{
+      const added=g.filter(r=>!ps.has(studentKey(r)));
+      const removed=pg.filter(r=>!ns.has(studentKey(r)));
+      result.changed.push({group:g,previousGroup:pg,added,removed});
+    }
+  }
+
+  for(const [key,g] of prevMap){
+    if(!nowMap.has(key))result.solved.push(g);
+  }
+  return result;
 }
 function labelGroup(g){
   const r=g[0];
@@ -467,7 +511,7 @@ function render(){
   $("#snapshotLabel").textContent=currentSnapshotLabel;
   $("#previousInfo").textContent=previousSnapshot?`이전 분석본: ${previousSnapshot.label||"저장본"}`:"이전 비교자료 없음";
   $("#studentCount").textContent=students.size;$("#rowCount").textContent=rows.length;$("#exactCount").textContent=exact.length;$("#deptCount").textContent=dept.length;
-  $("#newCount").textContent=changes.new.length;
+  $("#newCount").textContent=changes.new.length+changes.changed.length;
 
   $("#gradeFilterPanel").classList.toggle("hidden",gradeRows.length===0);
   if(gradeRows.length){
@@ -478,6 +522,9 @@ function render(){
     $("#filteredRowCount").textContent=visibleRows.length;
     $("#filteredExactCount").textContent=exact.length;
     $("#filteredDeptCount").textContent=dept.length;
+    const supportLabel=supportTypeMode==="jonghap"?"학종":supportTypeMode==="gyogwa"?"교과":"전체 전형";
+    const universityLabel=universitySearchText.trim()?`대학: ${universitySearchText.trim()}`:"전체 대학";
+    $("#filterStatusLine").textContent=`${supportLabel} · ${universityLabel}`;
     const sm=new Map();for(const r of visibleRows)if(!sm.has(studentKey(r)))sm.set(studentKey(r),r);
     $("#filteredStudentList").innerHTML=[...sm.values()].sort((a,b)=>Number(a.gradeInfo?.gradeValue||99)-Number(b.gradeInfo?.gradeValue||99))
       .map(r=>`<span class="filtered-student-chip"><strong>${esc(r.studentName)}</strong> · ${esc(`${r.classNo}반 ${r.studentNo}번`)} · ${Number(r.gradeInfo?.gradeValue).toFixed(2)}</span>`).join("")
@@ -485,7 +532,10 @@ function render(){
   }
 
   $("#changeSection").classList.toggle("hidden",!previousSnapshot);
-  $("#changeNewCount").textContent=changes.new.length;$("#changeStableCount").textContent=changes.stable.length;$("#changeSolvedCount").textContent=changes.solved.length;
+  $("#changeNewCount").textContent=changes.new.length;
+  $("#changeChangedCount").textContent=changes.changed.length;
+  $("#changeStableCount").textContent=changes.stable.length;
+  $("#changeSolvedCount").textContent=changes.solved.length;
 
   $$(".tab").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));
   $("#duplicateSection").classList.toggle("hidden",currentView==="all");$("#allRowsSection").classList.toggle("hidden",currentView!=="all");
@@ -518,10 +568,46 @@ function renderDuplicates(){
   host.innerHTML=groups.map(([,g])=>`<article class="duplicate-group"><div class="dup-head"><div><h3>${esc(labelGroup(g))}</h3><div class="dup-meta">${currentView==="exact"?"대학·모집단위·전형이 모두 일치":"같은 대학·모집단위, 전형은 다름"}</div></div><span class="count">${new Set(g.map(studentKey)).size}명 중복</span></div><div class="people">${renderPeople(g)}</div></article>`).join("");
 }
 function renderChanges(){
-  const ch=computeChanges(), groups=ch[changeMode]||[], host=$("#changeList");
-  if(!groups.length){host.innerHTML='<div class="empty-state">해당 변화가 없습니다.</div>';return}
-  const text=changeMode==="new"?"새로 발생":changeMode==="solved"?"해소됨":"계속 중복";
-  host.innerHTML=groups.map(g=>`<article class="duplicate-group change-row ${changeMode}"><div class="dup-head"><h3>${esc(labelGroup(g))}</h3><span class="status-chip ${changeMode}">${text}</span></div><div class="people">${renderPeople(g)}</div></article>`).join("");
+  const ch=computeChanges(), raw=ch[changeMode]||[], host=$("#changeList");
+  if(!raw.length){
+    host.innerHTML='<div class="empty-state">해당 변화가 없습니다.</div>';
+    return;
+  }
+
+  const textMap={new:"새로 발생",changed:"인원 변동",stable:"계속 중복",solved:"해소됨"};
+  const text=textMap[changeMode]||"변화";
+
+  host.innerHTML=raw.map(item=>{
+    const g=changeMode==="changed"?item.group:item;
+    let diffHtml="";
+
+    if(changeMode==="changed"){
+      const gm=gradeMap();
+      const added=[...new Map(item.added.map(r=>[studentKey(r),r])).values()];
+      const removed=[...new Map(item.removed.map(r=>[studentKey(r),r])).values()];
+
+      const chip=(r,kind)=>{
+        const gi=r.gradeInfo||gm.get(studentKey(r));
+        const gv=Number(gi?.gradeValue);
+        const gradeText=Number.isFinite(gv)?` · 내신 ${gv.toFixed(2)}`:"";
+        return `<span class="change-person-chip ${kind}">${kind==="added"?"+":"−"} ${esc(`${r.classNo}반 ${r.studentNo}번 ${r.studentName}${gradeText}`)}</span>`;
+      };
+
+      diffHtml=`<div class="member-change-summary">
+        ${added.length?`<div><span class="change-label add">추가</span>${added.map(r=>chip(r,"added")).join("")}</div>`:""}
+        ${removed.length?`<div><span class="change-label remove">제외</span>${removed.map(r=>chip(r,"removed")).join("")}</div>`:""}
+      </div>`;
+    }
+
+    return `<article class="duplicate-group change-row ${changeMode}">
+      <div class="dup-head">
+        <h3>${esc(labelGroup(g))}</h3>
+        <span class="status-chip ${changeMode}">${text}</span>
+      </div>
+      ${diffHtml}
+      <div class="people">${renderPeople(g)}</div>
+    </article>`;
+  }).join("");
 }
 function renderAll(){
   $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td></tr>`).join("");
@@ -544,6 +630,24 @@ function exportCsv(){
 }
 
 
+
+
+$$(".support-chip").forEach(btn=>btn.onclick=()=>{
+  supportTypeMode=btn.dataset.support;
+  $$(".support-chip").forEach(b=>b.classList.toggle("active",b===btn));
+  render();
+});
+
+$("#universitySearch").oninput=e=>{
+  universitySearchText=e.target.value;
+  render();
+};
+
+$("#clearUniversitySearchBtn").onclick=()=>{
+  universitySearchText="";
+  $("#universitySearch").value="";
+  render();
+};
 
 $("#classFilter").onchange=e=>{classFilterMode=e.target.value;render();};
 $("#studentSearch").oninput=e=>{studentSearchText=e.target.value;render();};

@@ -116,6 +116,26 @@
         <button id="resetSubFilterBtn" class="ghost" type="button">반·검색 초기화</button>
       </div>
 
+      <div class="support-filter-row">
+        <div class="support-type-filter">
+          <span class="filter-title">전형 구분</span>
+          <div class="support-chip-row">
+            <button class="support-chip active" data-support="all" type="button">전체</button>
+            <button class="support-chip" data-support="jonghap" type="button">학종</button>
+            <button class="support-chip" data-support="gyogwa" type="button">교과</button>
+          </div>
+        </div>
+
+        <label class="university-search-label">대학 검색
+          <div class="university-search-box">
+            <input id="universitySearch" type="search" placeholder="예: 강원대, 가천대, 서울여대">
+            <button id="clearUniversitySearchBtn" class="ghost" type="button">검색 초기화</button>
+          </div>
+        </label>
+      </div>
+
+      <div id="filterStatusLine" class="filter-status-line">전체 전형 · 전체 대학</div>
+
       <div class="grade-analysis-summary">
         <div><span>선택 학생</span><strong id="filteredStudentCount">0</strong><small>명</small></div>
         <div><span>관심대학 항목</span><strong id="filteredRowCount">0</strong><small>건</small></div>

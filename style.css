@@ -105,3 +105,111 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   background:#fff8eb;
   color:#896f40;
 }
+
+/* v3.4 중복 그룹 인원 변동 표시 */
+.change-card[data-change="changed"]{
+  border-color:#e5c992;
+  background:#fffaf0;
+}
+.change-card[data-change="changed"] strong{color:#9a6713}
+.status-chip.changed{
+  background:#fff2cf;
+  border:1px solid #ecd28e;
+  color:#8a5d0b;
+}
+.member-change-summary{
+  margin:10px 0 12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#fbfcfe;
+  border:1px solid #e3e8ef;
+}
+.member-change-summary>div{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.member-change-summary>div+div{margin-top:7px}
+.change-label{
+  display:inline-flex;
+  min-width:34px;
+  justify-content:center;
+  padding:4px 7px;
+  border-radius:999px;
+  font-size:9px;
+  font-weight:900;
+}
+.change-label.add{background:#eaf7ee;color:#317447}
+.change-label.remove{background:#fff0f0;color:#a44c4c}
+.change-person-chip{
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:9px;
+  font-weight:800;
+}
+.change-person-chip.added{background:#eff9f2;color:#356e48;border:1px solid #cbe8d4}
+.change-person-chip.removed{background:#fff4f4;color:#945050;border:1px solid #edcece}
+
+/* v3.5 학종/교과 + 대학 검색 */
+.support-filter-row{
+  display:grid;
+  grid-template-columns:auto minmax(260px,1fr);
+  gap:14px;
+  align-items:end;
+  margin-top:12px;
+  padding:12px;
+  background:#fbfcfe;
+  border:1px solid #e4e9f0;
+  border-radius:12px;
+}
+.filter-title,
+.university-search-label{
+  font-size:10px;
+  color:#6c7889;
+}
+.support-type-filter{display:flex;flex-direction:column;gap:6px}
+.support-chip-row{display:flex;gap:7px;flex-wrap:wrap}
+.support-chip{
+  border:1px solid #dce4ee;
+  background:#fff;
+  color:#607087;
+  border-radius:999px;
+  padding:8px 13px;
+  font-size:11px;
+  font-weight:900;
+}
+.support-chip.active{
+  background:#eef4ff;
+  border-color:#b9cceb;
+  color:#315f99;
+}
+.university-search-label{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.university-search-box{
+  display:flex;
+  gap:7px;
+}
+.university-search-box input{
+  flex:1;
+  min-width:180px;
+  height:34px;
+  border:1px solid #d7dee8;
+  border-radius:8px;
+  padding:0 10px;
+  font-size:11px;
+  background:#fff;
+}
+.filter-status-line{
+  margin-top:8px;
+  font-size:10px;
+  color:#718096;
+}
+@media(max-width:800px){
+  .support-filter-row{grid-template-columns:1fr}
+  .university-search-box{flex-direction:column}
+  .university-search-box input{width:100%}
+}
