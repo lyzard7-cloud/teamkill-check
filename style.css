@@ -213,3 +213,9 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   .university-search-box{flex-direction:column}
   .university-search-box input{width:100%}
 }
+
+.changed-change{
+  border-color:#e5c992 !important;
+  background:#fffaf0 !important;
+}
+.changed-change strong{color:#9a6713 !important}

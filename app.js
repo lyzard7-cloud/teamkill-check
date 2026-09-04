@@ -66,10 +66,16 @@ function supportCategory(r){
   if(t.includes("교과")) return "gyogwa";
   return "other";
 }
+function universityAlias(v=""){
+  return norm(v)
+    .replace(/대학교/g,"대")
+    .replace(/여자대학교/g,"여대")
+    .replace(/교육대학교/g,"교대");
+}
 function universityMatches(r){
-  const q=norm(universitySearchText);
+  const q=universityAlias(universitySearchText);
   if(!q) return true;
-  const u=norm(r.university||"");
+  const u=universityAlias(r.university||"");
   return u.includes(q) || q.includes(u);
 }
 
@@ -532,10 +538,10 @@ function render(){
   }
 
   $("#changeSection").classList.toggle("hidden",!previousSnapshot);
-  $("#changeNewCount").textContent=changes.new.length;
-  $("#changeChangedCount").textContent=changes.changed.length;
-  $("#changeStableCount").textContent=changes.stable.length;
-  $("#changeSolvedCount").textContent=changes.solved.length;
+  if($("#changeNewCount")) $("#changeNewCount").textContent=changes.new.length;
+  if($("#changeChangedCount")) $("#changeChangedCount").textContent=changes.changed.length;
+  if($("#changeStableCount")) $("#changeStableCount").textContent=changes.stable.length;
+  if($("#changeSolvedCount")) $("#changeSolvedCount").textContent=changes.solved.length;
 
   $$(".tab").forEach(b=>b.classList.toggle("active",b.dataset.view===currentView));
   $("#duplicateSection").classList.toggle("hidden",currentView==="all");$("#allRowsSection").classList.toggle("hidden",currentView!=="all");
