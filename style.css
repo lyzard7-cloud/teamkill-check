@@ -68,3 +68,14 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   line-height:1.5;
   color:#6e7f93;
 }
+
+.analysis-filter-row{
+  display:flex;align-items:end;gap:10px;flex-wrap:wrap;
+  margin-top:12px;padding:12px;background:#fbfcfe;border:1px solid #e4e9f0;border-radius:12px
+}
+.analysis-filter-row label{font-size:10px;color:#6c7889;display:flex;flex-direction:column;gap:4px}
+.analysis-filter-row select,.analysis-filter-row input{
+  height:34px;border:1px solid #d7dee8;border-radius:8px;background:#fff;padding:0 10px;font-size:11px
+}
+.student-search-label{min-width:220px}.student-search-label input{width:220px}
+@media(max-width:800px){.student-search-label,.student-search-label input{width:100%;min-width:0}}

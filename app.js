@@ -5,7 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 
 const STORAGE_KEY="gangil-teamkill-interestlist-v2";
 let rows=[], gradeRows=[], currentView="exact", editDraft=[], currentSnapshotLabel="", previousSnapshot=null;
-let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null;
+let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null, classFilterMode="all", studentSearchText="";
 let changeMode="new";
 
 function toast(msg){const e=$("#toast");e.textContent=msg;e.classList.remove("hidden");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.add("hidden"),2400)}
@@ -19,17 +19,44 @@ function gradeStudentKey(r){return `${r.grade}-${r.classNo}-${r.studentNo}-${nor
 function gradeMap(){return new Map(gradeRows.map(r=>[gradeStudentKey(r),r]))}
 function matchedRows(){const gm=gradeMap();return rows.map(r=>({...r,gradeInfo:gm.get(studentKey(r))||null}))}
 function activeRows(){
-  if(!gradeRows.length) return rows;
-  return matchedRows().filter(r=>{
-    const g=Number(r.gradeInfo?.gradeValue); if(!Number.isFinite(g)) return false;
-    if(gradeRangeMin!=null||gradeRangeMax!=null){
-      if(gradeRangeMin!=null&&g<gradeRangeMin)return false;
-      if(gradeRangeMax!=null&&g>gradeRangeMax)return false;
+  if(!gradeRows.length){
+    return rows.filter(r=>{
+      if(classFilterMode!=="all" && String(r.classNo)!==String(classFilterMode)) return false;
+      const q=norm(studentSearchText);
+      if(q){
+        const schoolNo=`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`;
+        const hay=norm(`${r.studentName} ${schoolNo} ${r.classNo}반 ${r.studentNo}번`);
+        if(!hay.includes(q)) return false;
+      }
       return true;
+    });
+  }
+
+  return matchedRows().filter(r=>{
+    const g=Number(r.gradeInfo?.gradeValue);
+    if(!Number.isFinite(g)) return false;
+
+    let gradeOk=true;
+    if(gradeRangeMin!=null||gradeRangeMax!=null){
+      if(gradeRangeMin!=null&&g<gradeRangeMin) gradeOk=false;
+      if(gradeRangeMax!=null&&g>gradeRangeMax) gradeOk=false;
+    }else if(gradeFilterMode==="7"){
+      gradeOk=g>=7;
+    }else if(gradeFilterMode!=="all"){
+      const n=Number(gradeFilterMode);
+      gradeOk=g>=n&&g<n+1;
     }
-    if(gradeFilterMode==="all")return true;
-    if(gradeFilterMode==="7")return g>=7;
-    const n=Number(gradeFilterMode);return g>=n&&g<n+1;
+    if(!gradeOk) return false;
+
+    if(classFilterMode!=="all" && String(r.classNo)!==String(classFilterMode)) return false;
+
+    const q=norm(studentSearchText);
+    if(q){
+      const schoolNo=`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`;
+      const hay=norm(`${r.studentName} ${schoolNo} ${r.classNo}반 ${r.studentNo}번`);
+      if(!hay.includes(q)) return false;
+    }
+    return true;
   });
 }
 function exactKey(r){return [norm(r.university),norm(r.department),norm(r.admissionType),norm(r.admissionDetail)].join("|")}
@@ -423,6 +450,13 @@ async function handleFile(file){
     console.error(e);toast(e.message||"PDF 분석에 실패했습니다.");
   }finally{$("#progressModal").classList.add("hidden")}
 }
+
+function studentDisplay(r){
+  const gi=r.gradeInfo || gradeMap().get(studentKey(r));
+  const g=Number(gi?.gradeValue);
+  const gtxt=Number.isFinite(g)?` · 내신 ${g.toFixed(2)}`:"";
+  return `${esc(r.classNo)}반 ${esc(r.studentNo)}번 ${esc(r.studentName)}${gtxt}`;
+}
 function render(){
   const has=rows.length>0;
   $("#summarySection").classList.toggle("hidden",!has);$("#emptyState").classList.toggle("hidden",has);
@@ -493,6 +527,15 @@ function exportCsv(){
   const u=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})),a=document.createElement("a");a.href=u;a.download="관심대학_팀킬분석.csv";a.click();URL.revokeObjectURL(u);
 }
 
+
+
+$("#classFilter").onchange=e=>{classFilterMode=e.target.value;render();};
+$("#studentSearch").oninput=e=>{studentSearchText=e.target.value;render();};
+$("#resetSubFilterBtn").onclick=()=>{
+  classFilterMode="all";studentSearchText="";
+  $("#classFilter").value="all";$("#studentSearch").value="";
+  render();
+};
 
 $$(".grade-chip").forEach(btn=>btn.onclick=()=>{
   gradeFilterMode=btn.dataset.grade;gradeRangeMin=null;gradeRangeMax=null;

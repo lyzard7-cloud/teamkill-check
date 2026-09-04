@@ -95,6 +95,27 @@
         <button id="clearGradeRangeBtn" class="ghost" type="button">전체 보기</button>
       </div>
 
+      <div class="analysis-filter-row">
+        <label>반 선택
+          <select id="classFilter">
+            <option value="all">전체 반</option>
+            <option value="1">1반</option>
+            <option value="2">2반</option>
+            <option value="3">3반</option>
+            <option value="4">4반</option>
+            <option value="5">5반</option>
+            <option value="6">6반</option>
+            <option value="7">7반</option>
+            <option value="8">8반</option>
+            <option value="9">9반</option>
+          </select>
+        </label>
+        <label class="student-search-label">학생 검색
+          <input id="studentSearch" type="search" placeholder="이름 또는 학번">
+        </label>
+        <button id="resetSubFilterBtn" class="ghost" type="button">반·검색 초기화</button>
+      </div>
+
       <div class="grade-analysis-summary">
         <div><span>선택 학생</span><strong id="filteredStudentCount">0</strong><small>명</small></div>
         <div><span>관심대학 항목</span><strong id="filteredRowCount">0</strong><small>건</small></div>
