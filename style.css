@@ -44,3 +44,19 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 .status-chip.new{background:#fdebed;color:#b64049}.status-chip.solved{background:#e9f7ed;color:#367a4d}
 .edit-row{grid-template-columns:95px 90px repeat(4,1fr) 42px}
 @media(max-width:760px){.change-grid{grid-template-columns:1fr}.snapshot-bar{align-items:flex-start;flex-direction:column}}
+
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grade-zone{background:#fbfffc}.grade-zone .drop-icon{background:#e9f6ed;color:#3e8055}
+.grade-filter-panel{margin-top:18px;padding:16px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 26px rgba(29,45,72,.06)}
+.grade-filter-panel .section-head p{margin:5px 0 0;color:#758397;font-size:11px}
+.grade-chip-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}
+.grade-chip{border:1px solid #dce4ee;background:#fff;color:#607087;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:800}
+.grade-chip.active{background:#eaf2ff;border-color:#b8cbe8;color:#365f98}
+.grade-range-row{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e4e9f0;border-radius:12px}
+.grade-range-row label{font-size:10px;color:#6c7889}.grade-range-row input{width:95px;margin-top:4px;padding:8px 9px;border:1px solid #d7dee8;border-radius:8px}
+.grade-analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.grade-analysis-summary>div{border:1px solid #e0e6ee;border-radius:12px;padding:11px 12px;background:#fbfcfe}
+.grade-analysis-summary span{display:block;font-size:10px;color:#728095}.grade-analysis-summary strong{display:inline-block;margin-top:5px;font-size:22px}.grade-analysis-summary small{font-size:9px;color:#8290a0;margin-left:3px}
+.student-list-details{margin-top:12px}.student-list-details summary{cursor:pointer;font-size:11px;font-weight:800;color:#53667f}
+.filtered-student-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.filtered-student-chip{border:1px solid #dce4ee;background:#fafcff;border-radius:999px;padding:5px 8px;font-size:9px;color:#5d6b7f}.filtered-student-chip strong{color:#334d70}
+@media(max-width:800px){.upload-grid{grid-template-columns:1fr}.grade-analysis-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -4,7 +4,8 @@ const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 
 const STORAGE_KEY="gangil-teamkill-interestlist-v2";
-let rows=[], currentView="exact", editDraft=[], currentSnapshotLabel="", previousSnapshot=null;
+let rows=[], gradeRows=[], currentView="exact", editDraft=[], currentSnapshotLabel="", previousSnapshot=null;
+let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null;
 let changeMode="new";
 
 function toast(msg){const e=$("#toast");e.textContent=msg;e.classList.remove("hidden");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.add("hidden"),2400)}
@@ -13,6 +14,24 @@ function esc(v=""){return String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":
 function cleanCell(v=""){return String(v||"").replace(/\s+/g,"").replace(/[\u200b\u00a0]/g,"").trim()}
 function schoolNo(r){return `${r.grade||""}${String(r.classNo||"").padStart(2,"0")}${String(r.studentNo||"").padStart(2,"0")}`}
 function studentKey(r){return `${r.grade}-${r.classNo}-${r.studentNo}-${norm(r.studentName)}`}
+
+function gradeStudentKey(r){return `${r.grade}-${r.classNo}-${r.studentNo}-${norm(r.studentName)}`}
+function gradeMap(){return new Map(gradeRows.map(r=>[gradeStudentKey(r),r]))}
+function matchedRows(){const gm=gradeMap();return rows.map(r=>({...r,gradeInfo:gm.get(studentKey(r))||null}))}
+function activeRows(){
+  if(!gradeRows.length) return rows;
+  return matchedRows().filter(r=>{
+    const g=Number(r.gradeInfo?.gradeValue); if(!Number.isFinite(g)) return false;
+    if(gradeRangeMin!=null||gradeRangeMax!=null){
+      if(gradeRangeMin!=null&&g<gradeRangeMin)return false;
+      if(gradeRangeMax!=null&&g>gradeRangeMax)return false;
+      return true;
+    }
+    if(gradeFilterMode==="all")return true;
+    if(gradeFilterMode==="7")return g>=7;
+    const n=Number(gradeFilterMode);return g>=n&&g<n+1;
+  });
+}
 function exactKey(r){return [norm(r.university),norm(r.department),norm(r.admissionType),norm(r.admissionDetail)].join("|")}
 function deptKey(r){return [norm(r.university),norm(r.department)].join("|")}
 
@@ -212,6 +231,31 @@ function parsePage(items,pageNo){
   return parsed;
 }
 
+
+function parseGradePdfPages(pages){
+  const tokens=pages.flatMap(items=>items.map(i=>String(i.text||"").trim()).filter(Boolean));
+  const text=tokens.join(" ").replace(/\s+/g," ");
+  const re=/7차일반\s+3\s+([1-9])\s+(\d{1,2})\s+([가-힣]{2,5})\s+(\d{1,3})\s+([\d.]+)\s+([\d.]+)/g;
+  const out=[];let m;
+  while((m=re.exec(text))!==null){
+    out.push({grade:"3",classNo:m[1],studentNo:m[2],studentName:m[3],rank:Number(m[4]),percent:Number(m[5]),gradeValue:Number(m[6])});
+  }
+  const uniq=new Map();for(const r of out)if(Number.isFinite(r.gradeValue))uniq.set(gradeStudentKey(r),r);
+  return [...uniq.values()];
+}
+async function handleGradeFile(file){
+  if(!file||!(/\.pdf$/i.test(file.name)||file.type==="application/pdf"))return toast("내신등급 PDF 파일을 선택해 주세요.");
+  $("#progressModal").classList.remove("hidden");$("#progressTitle").textContent="내신등급 PDF 분석 중...";
+  try{
+    const pages=await extractItems(file), parsed=parseGradePdfPages(pages);
+    if(!parsed.length)throw new Error("내신등급 학생 정보를 인식하지 못했습니다.");
+    gradeRows=parsed;gradeFilterMode="all";gradeRangeMin=null;gradeRangeMax=null;
+    $("#gradeMin").value="";$("#gradeMax").value="";$$(".grade-chip").forEach(b=>b.classList.toggle("active",b.dataset.grade==="all"));
+    render();toast(`내신등급 ${gradeRows.length}명 분석 완료`);
+  }catch(e){console.error(e);toast(e.message||"내신등급 PDF 분석에 실패했습니다.");}
+  finally{$("#progressModal").classList.add("hidden");}
+}
+
 function detectTimestamp(pages){
   const txt=pages.slice(0,2).flat().map(x=>x.text).join(" ");
   const m=txt.match(/(20\d{2})[-/.](\d{2})[-/.](\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
@@ -224,7 +268,7 @@ function dedupeRows(list){
     if(seen.has(k))return false;seen.add(k);return true;
   });
 }
-function groupBy(keyFn,list=rows){
+function groupBy(keyFn,list=activeRows()){
   const m=new Map();
   for(const r of list){
     const k=keyFn(r); if(!k||k.replace(/\|/g,"")==="")continue;
@@ -232,8 +276,8 @@ function groupBy(keyFn,list=rows){
   }
   return [...m.entries()].filter(([,g])=>new Set(g.map(studentKey)).size>1).sort((a,b)=>b[1].length-a[1].length);
 }
-function exactGroups(list=rows){return groupBy(exactKey,list)}
-function deptGroups(list=rows){
+function exactGroups(list=activeRows()){return groupBy(exactKey,list)}
+function deptGroups(list=activeRows()){
   return groupBy(deptKey,list).filter(([k,g])=>new Set(g.map(exactKey)).size>1);
 }
 function groupSignature(g){
@@ -287,11 +331,28 @@ function render(){
   $("#summarySection").classList.toggle("hidden",!has);$("#emptyState").classList.toggle("hidden",has);
   if(!has)return;
 
+  const visibleRows=activeRows();
   const students=new Set(rows.map(studentKey)), exact=exactGroups(), dept=deptGroups(), changes=computeChanges();
   $("#snapshotLabel").textContent=currentSnapshotLabel;
   $("#previousInfo").textContent=previousSnapshot?`이전 분석본: ${previousSnapshot.label||"저장본"}`:"이전 비교자료 없음";
   $("#studentCount").textContent=students.size;$("#rowCount").textContent=rows.length;$("#exactCount").textContent=exact.length;$("#deptCount").textContent=dept.length;
   $("#newCount").textContent=changes.new.length;
+
+  $("#gradeFilterPanel").classList.toggle("hidden",gradeRows.length===0);
+  if(gradeRows.length){
+    const gm=gradeMap();
+    const matchedStudentKeys=new Set(rows.filter(r=>gm.has(studentKey(r))).map(studentKey));
+    $("#gradeMatchInfo").textContent=`내신 ${gradeRows.length}명 중 관심대학 자료와 ${matchedStudentKeys.size}명 연결됨`;
+    $("#filteredStudentCount").textContent=new Set(visibleRows.map(studentKey)).size;
+    $("#filteredRowCount").textContent=visibleRows.length;
+    $("#filteredExactCount").textContent=exact.length;
+    $("#filteredDeptCount").textContent=dept.length;
+    const sm=new Map();for(const r of visibleRows)if(!sm.has(studentKey(r)))sm.set(studentKey(r),r);
+    $("#filteredStudentList").innerHTML=[...sm.values()].sort((a,b)=>Number(a.gradeInfo?.gradeValue||99)-Number(b.gradeInfo?.gradeValue||99))
+      .map(r=>`<span class="filtered-student-chip"><strong>${esc(r.studentName)}</strong> · ${esc(`${r.classNo}반 ${r.studentNo}번`)} · ${Number(r.gradeInfo?.gradeValue).toFixed(2)}</span>`).join("")
+      || '<span class="filtered-student-chip">현재 조건에 해당하는 학생이 없습니다.</span>';
+  }
+
   $("#changeSection").classList.toggle("hidden",!previousSnapshot);
   $("#changeNewCount").textContent=changes.new.length;$("#changeStableCount").textContent=changes.stable.length;$("#changeSolvedCount").textContent=changes.solved.length;
 
@@ -316,7 +377,7 @@ function renderChanges(){
   host.innerHTML=groups.map(g=>`<article class="duplicate-group change-row ${changeMode}"><div class="dup-head"><h3>${esc(labelGroup(g))}</h3><span class="status-chip ${changeMode}">${text}</span></div><div class="people">${renderPeople(g)}</div></article>`).join("");
 }
 function renderAll(){
-  $("#rowsBody").innerHTML=rows.map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td></tr>`).join("");
+  $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td></tr>`).join("");
 }
 function openEdit(){
   editDraft=rows.map(r=>({...r}));
@@ -334,6 +395,29 @@ function exportCsv(){
   const csv="\ufeff"+[head.map(q).join(","),...rows.map(r=>[r.grade,r.classNo,r.studentNo,r.studentName,r.university,r.department,r.admissionType,r.admissionDetail].map(q).join(","))].join("\n");
   const u=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})),a=document.createElement("a");a.href=u;a.download="관심대학_팀킬분석.csv";a.click();URL.revokeObjectURL(u);
 }
+
+
+$$(".grade-chip").forEach(btn=>btn.onclick=()=>{
+  gradeFilterMode=btn.dataset.grade;gradeRangeMin=null;gradeRangeMax=null;
+  $("#gradeMin").value="";$("#gradeMax").value="";
+  $$(".grade-chip").forEach(b=>b.classList.toggle("active",b===btn));render();
+});
+$("#applyGradeRangeBtn").onclick=()=>{
+  const a=$("#gradeMin").value.trim(),b=$("#gradeMax").value.trim();
+  gradeRangeMin=a===""?null:Number(a);gradeRangeMax=b===""?null:Number(b);
+  if(gradeRangeMin!=null&&gradeRangeMax!=null&&gradeRangeMin>gradeRangeMax)[gradeRangeMin,gradeRangeMax]=[gradeRangeMax,gradeRangeMin];
+  $$(".grade-chip").forEach(b=>b.classList.remove("active"));render();
+};
+$("#clearGradeRangeBtn").onclick=()=>{
+  gradeFilterMode="all";gradeRangeMin=null;gradeRangeMax=null;$("#gradeMin").value="";$("#gradeMax").value="";
+  $$(".grade-chip").forEach(b=>b.classList.toggle("active",b.dataset.grade==="all"));render();
+};
+$("#gradeChooseBtn").onclick=()=>$("#gradeFileInput").click();
+$("#gradeFileInput").onchange=e=>handleGradeFile(e.target.files[0]);
+const gdz=$("#gradeDropZone");
+["dragenter","dragover"].forEach(ev=>gdz.addEventListener(ev,e=>{e.preventDefault();gdz.classList.add("dragover")}));
+["dragleave","drop"].forEach(ev=>gdz.addEventListener(ev,e=>{e.preventDefault();gdz.classList.remove("dragover")}));
+gdz.addEventListener("drop",e=>handleGradeFile(e.dataTransfer.files[0]));
 
 $("#chooseBtn").onclick=()=>$("#fileInput").click();
 $("#fileInput").onchange=e=>handleFile(e.target.files[0]);

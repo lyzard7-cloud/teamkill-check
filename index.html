@@ -17,15 +17,24 @@
 </header>
 
 <main class="container">
-  <section class="upload-card">
-    <div id="dropZone" class="drop-zone" tabindex="0">
-      <div class="drop-icon">PDF</div>
-      <strong>관심대학 리스트 PDF를 올려주세요</strong>
-      <span>3학년 전체 목록 PDF 1개를 최신본으로 다시 올리면 됩니다.</span>
-      <button id="chooseBtn" class="primary" type="button">PDF 파일 선택</button>
-      <input id="fileInput" type="file" accept=".pdf,application/pdf" hidden>
+  <section class="upload-card dual-upload">
+    <div class="upload-grid">
+      <div id="dropZone" class="drop-zone" tabindex="0">
+        <div class="drop-icon">대학</div>
+        <strong>관심대학 리스트 PDF</strong>
+        <span>3학년 전체 관심대학 목록 PDF를 올려주세요.</span>
+        <button id="chooseBtn" class="primary" type="button">관심대학 PDF 선택</button>
+        <input id="fileInput" type="file" accept=".pdf,application/pdf" hidden>
+      </div>
+      <div id="gradeDropZone" class="drop-zone grade-zone" tabindex="0">
+        <div class="drop-icon">성적</div>
+        <strong>내신등급 PDF</strong>
+        <span>학년·반·번호·이름·내신등급이 들어 있는 PDF를 올려주세요.</span>
+        <button id="gradeChooseBtn" class="primary" type="button">내신등급 PDF 선택</button>
+        <input id="gradeFileInput" type="file" accept=".pdf,application/pdf" hidden>
+      </div>
     </div>
-    <div class="privacy-note">PDF는 브라우저 안에서만 읽습니다. 분석 결과만 이 브라우저에 저장되어 이전 결과와 비교됩니다.</div>
+    <div class="privacy-note">두 PDF 모두 브라우저 안에서만 읽습니다. 원본 PDF는 별도 서버로 전송하지 않습니다.</div>
   </section>
 
   <section id="summarySection" class="hidden">
@@ -55,6 +64,47 @@
         <button class="change-card solved-change" data-change="solved"><span>해소됨</span><strong id="changeSolvedCount">0</strong></button>
       </div>
       <div id="changeList" class="duplicate-list"></div>
+    </section>
+
+    <section id="gradeFilterPanel" class="grade-filter-panel hidden">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">내신등급 기반 분석</span>
+          <h2>분석 대상 등급 선택</h2>
+          <p id="gradeMatchInfo">내신등급 PDF를 업로드하면 관심대학 자료와 자동 연결됩니다.</p>
+        </div>
+      </div>
+
+      <div class="grade-chip-row">
+        <button class="grade-chip active" data-grade="all" type="button">전체</button>
+        <button class="grade-chip" data-grade="1" type="button">1등급대</button>
+        <button class="grade-chip" data-grade="2" type="button">2등급대</button>
+        <button class="grade-chip" data-grade="3" type="button">3등급대</button>
+        <button class="grade-chip" data-grade="4" type="button">4등급대</button>
+        <button class="grade-chip" data-grade="5" type="button">5등급대</button>
+        <button class="grade-chip" data-grade="6" type="button">6등급대</button>
+        <button class="grade-chip" data-grade="7" type="button">7등급 이상</button>
+      </div>
+
+      <div class="grade-range-row">
+        <label>직접 범위<input id="gradeMin" type="number" step="0.01" min="1" max="9" placeholder="최소"></label>
+        <span>~</span>
+        <label><input id="gradeMax" type="number" step="0.01" min="1" max="9" placeholder="최대"></label>
+        <button id="applyGradeRangeBtn" class="ghost" type="button">범위 적용</button>
+        <button id="clearGradeRangeBtn" class="ghost" type="button">전체 보기</button>
+      </div>
+
+      <div class="grade-analysis-summary">
+        <div><span>선택 학생</span><strong id="filteredStudentCount">0</strong><small>명</small></div>
+        <div><span>관심대학 항목</span><strong id="filteredRowCount">0</strong><small>건</small></div>
+        <div><span>완전 중복</span><strong id="filteredExactCount">0</strong><small>그룹</small></div>
+        <div><span>대학·학과 중복</span><strong id="filteredDeptCount">0</strong><small>그룹</small></div>
+      </div>
+
+      <details class="student-list-details">
+        <summary>현재 분석 대상 학생 보기</summary>
+        <div id="filteredStudentList" class="filtered-student-list"></div>
+      </details>
     </section>
 
     <div class="toolbar">
