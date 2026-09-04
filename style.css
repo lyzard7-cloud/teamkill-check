@@ -219,3 +219,58 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   background:#fffaf0 !important;
 }
 .changed-change strong{color:#9a6713 !important}
+
+/* v3.6 팀킬 위험도 */
+.risk-filter-row{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex-wrap:wrap;
+  margin-top:10px;
+  padding:10px 12px;
+  background:#fbfcfe;
+  border:1px solid #e4e9f0;
+  border-radius:12px;
+}
+.risk-chip{
+  border:1px solid #dce4ee;
+  background:#fff;
+  color:#607087;
+  border-radius:999px;
+  padding:7px 11px;
+  font-size:10px;
+  font-weight:900;
+}
+.risk-chip.active{outline:2px solid rgba(49,95,153,.16)}
+.risk-chip.high.active{background:#fff0f0;border-color:#e8bcbc;color:#a33b3b}
+.risk-chip.medium.active{background:#fff8e9;border-color:#e6ce99;color:#906113}
+.risk-chip.low.active{background:#eef8f1;border-color:#c6e0ce;color:#39734c}
+.risk-chip.unknown.active{background:#f2f4f7;border-color:#d7dde5;color:#6d7786}
+
+.dup-head-right{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+}
+.risk-badge,.grade-gap{
+  display:inline-flex;
+  align-items:center;
+  min-height:24px;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:9px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.risk-badge.high{background:#fff0f0;border:1px solid #e8bcbc;color:#a33b3b}
+.risk-badge.medium{background:#fff8e9;border:1px solid #e6ce99;color:#906113}
+.risk-badge.low{background:#eef8f1;border:1px solid #c6e0ce;color:#39734c}
+.risk-badge.unknown{background:#f2f4f7;border:1px solid #d7dde5;color:#6d7786}
+.grade-gap{background:#f6f8fb;border:1px solid #dfe5ed;color:#637084}
+
+.duplicate-group.risk-high{border-left:4px solid #d56b6b}
+.duplicate-group.risk-medium{border-left:4px solid #d5a84f}
+.duplicate-group.risk-low{border-left:4px solid #72a883}
+.duplicate-group.risk-unknown{border-left:4px solid #aab3bf}

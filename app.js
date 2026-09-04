@@ -5,7 +5,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 
 const STORAGE_KEY="gangil-teamkill-interestlist-v2";
 let rows=[], gradeRows=[], currentView="exact", editDraft=[], currentSnapshotLabel="", previousSnapshot=null;
-let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null, classFilterMode="all", studentSearchText="", supportTypeMode="all", universitySearchText="";
+let gradeFilterMode="all", gradeRangeMin=null, gradeRangeMax=null, classFilterMode="all", studentSearchText="", supportTypeMode="all", universitySearchText="", riskFilterMode="all";
 let changeMode="new";
 
 function toast(msg){const e=$("#toast");e.textContent=msg;e.classList.remove("hidden");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.add("hidden"),2400)}
@@ -78,6 +78,45 @@ function universityMatches(r){
   const u=universityAlias(r.university||"");
   return u.includes(q) || q.includes(u);
 }
+
+function groupRisk(g){
+  const gm=gradeMap();
+  const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
+  const grades=unique.map(r=>{
+    const gi=r.gradeInfo || gm.get(studentKey(r));
+    const v=Number(gi?.gradeValue);
+    return Number.isFinite(v)?v:null;
+  });
+
+  if(grades.some(v=>v==null) || grades.length<2){
+    return {level:"unknown",label:"판단 보류",gap:null};
+  }
+
+  const min=Math.min(...grades), max=Math.max(...grades);
+  const gap=+(max-min).toFixed(2);
+
+  if(gap<=0.50) return {level:"high",label:"높음",gap};
+  if(gap<=1.00) return {level:"medium",label:"보통",gap};
+  return {level:"low",label:"낮음",gap};
+}
+function riskRank(level){
+  return ({high:0,medium:1,low:2,unknown:3})[level] ?? 9;
+}
+function applyRiskFilter(groups){
+  const filtered=riskFilterMode==="all"
+    ? groups
+    : groups.filter(([,g])=>groupRisk(g).level===riskFilterMode);
+
+  return [...filtered].sort((a,b)=>{
+    const ra=groupRisk(a[1]), rb=groupRisk(b[1]);
+    const d=riskRank(ra.level)-riskRank(rb.level);
+    if(d!==0)return d;
+    const ga=ra.gap==null?99:ra.gap, gb=rb.gap==null?99:rb.gap;
+    if(ga!==gb)return ga-gb;
+    return b[1].length-a[1].length;
+  });
+}
+
 
 
 async function extractItems(file){
@@ -569,9 +608,33 @@ function renderPeople(g){
   }).join("");
 }
 function renderDuplicates(){
-  const groups=currentView==="exact"?exactGroups():deptGroups(), host=$("#duplicateList");
-  if(!groups.length){host.innerHTML='<div class="empty-state">현재 중복지원 가능성이 없습니다.</div>';return}
-  host.innerHTML=groups.map(([,g])=>`<article class="duplicate-group"><div class="dup-head"><div><h3>${esc(labelGroup(g))}</h3><div class="dup-meta">${currentView==="exact"?"대학·모집단위·전형이 모두 일치":"같은 대학·모집단위, 전형은 다름"}</div></div><span class="count">${new Set(g.map(studentKey)).size}명 중복</span></div><div class="people">${renderPeople(g)}</div></article>`).join("");
+  let groups=currentView==="exact"?exactGroups():deptGroups();
+  groups=applyRiskFilter(groups);
+  const host=$("#duplicateList");
+
+  if(!groups.length){
+    host.innerHTML='<div class="empty-state">현재 조건에 해당하는 중복지원 가능성이 없습니다.</div>';
+    return;
+  }
+
+  host.innerHTML=groups.map(([,g])=>{
+    const risk=groupRisk(g);
+    const gapText=risk.gap==null?"내신 비교 불가":`내신 차이 ${risk.gap.toFixed(2)}`;
+    return `<article class="duplicate-group risk-${risk.level}">
+      <div class="dup-head">
+        <div>
+          <h3>${esc(labelGroup(g))}</h3>
+          <div class="dup-meta">${currentView==="exact"?"대학·모집단위·전형이 모두 일치":"같은 대학·모집단위, 전형은 다름"}</div>
+        </div>
+        <div class="dup-head-right">
+          <span class="risk-badge ${risk.level}">위험도 ${risk.label}</span>
+          <span class="grade-gap">${gapText}</span>
+          <span class="count">${new Set(g.map(studentKey)).size}명 중복</span>
+        </div>
+      </div>
+      <div class="people">${renderPeople(g)}</div>
+    </article>`;
+  }).join("");
 }
 function renderChanges(){
   const ch=computeChanges(), raw=ch[changeMode]||[], host=$("#changeList");
@@ -637,6 +700,13 @@ function exportCsv(){
 
 
 
+
+
+$$(".risk-chip").forEach(btn=>btn.onclick=()=>{
+  riskFilterMode=btn.dataset.risk;
+  $$(".risk-chip").forEach(b=>b.classList.toggle("active",b===btn));
+  render();
+});
 
 $$(".support-chip").forEach(btn=>btn.onclick=()=>{
   supportTypeMode=btn.dataset.support;
