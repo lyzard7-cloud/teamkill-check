@@ -60,3 +60,11 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 .student-list-details{margin-top:12px}.student-list-details summary{cursor:pointer;font-size:11px;font-weight:800;color:#53667f}
 .filtered-student-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.filtered-student-chip{border:1px solid #dce4ee;background:#fafcff;border-radius:999px;padding:5px 8px;font-size:9px;color:#5d6b7f}.filtered-student-chip strong{color:#334d70}
 @media(max-width:800px){.upload-grid{grid-template-columns:1fr}.grade-analysis-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.upload-status{
+  margin-top:10px;
+  min-height:18px;
+  font-size:10px;
+  line-height:1.5;
+  color:#6e7f93;
+}

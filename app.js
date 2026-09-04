@@ -233,27 +233,124 @@ function parsePage(items,pageNo){
 
 
 function parseGradePdfPages(pages){
-  const tokens=pages.flatMap(items=>items.map(i=>String(i.text||"").trim()).filter(Boolean));
-  const text=tokens.join(" ").replace(/\s+/g," ");
-  const re=/7차일반\s+3\s+([1-9])\s+(\d{1,2})\s+([가-힣]{2,5})\s+(\d{1,3})\s+([\d.]+)\s+([\d.]+)/g;
-  const out=[];let m;
-  while((m=re.exec(text))!==null){
-    out.push({grade:"3",classNo:m[1],studentNo:m[2],studentName:m[3],rank:Number(m[4]),percent:Number(m[5]),gradeValue:Number(m[6])});
+  const out=[];
+
+  for(const items of pages){
+    if(!items?.length) continue;
+
+    // PDF.js가 주는 텍스트 조각을 실제 화면의 위→아래, 왼쪽→오른쪽 순서로 재정렬
+    const ordered=[...items].sort((a,b)=>{
+      const dy=(b.y??0)-(a.y??0);
+      if(Math.abs(dy)>2.2) return dy;
+      return (a.x??0)-(b.x??0);
+    });
+
+    // 가까운 y값끼리 같은 줄로 묶는다.
+    const lines=[];
+    for(const it of ordered){
+      const txt=String(it.text||"").trim();
+      if(!txt) continue;
+
+      let line=lines.find(l=>Math.abs(l.y-(it.y??0))<=2.2);
+      if(!line){
+        line={y:(it.y??0),items:[]};
+        lines.push(line);
+      }
+      line.items.push(it);
+    }
+
+    lines.sort((a,b)=>b.y-a.y);
+    const texts=lines.map(l=>
+      l.items
+        .sort((a,b)=>(a.x??0)-(b.x??0))
+        .map(i=>String(i.text||"").trim())
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g," ")
+        .trim()
+    );
+
+    // 한 학생이 여러 줄에 걸쳐 있어도 잡히도록 연속 1~6줄을 합쳐 검사
+    for(let i=0;i<texts.length;i++){
+      for(let span=1;span<=6 && i+span<=texts.length;span++){
+        const s=texts.slice(i,i+span).join(" ").replace(/\s+/g," ").trim();
+
+        // 예: 7차일반 3 3 12 신송화 4 2.03 1.42
+        const m=s.match(/(?:7차일반\s+)?3\s+([1-9])\s+(\d{1,2})\s+([가-힣]{2,5})\s+(\d{1,3})\s+(\d{1,3}(?:\.\d+)?)\s+(\d(?:\.\d+)?)/);
+        if(!m) continue;
+
+        const row={
+          grade:"3",
+          classNo:m[1],
+          studentNo:m[2],
+          studentName:m[3],
+          rank:Number(m[4]),
+          percent:Number(m[5]),
+          gradeValue:Number(m[6])
+        };
+
+        if(
+          Number.isFinite(row.rank) &&
+          Number.isFinite(row.percent) &&
+          Number.isFinite(row.gradeValue) &&
+          row.gradeValue>=1 && row.gradeValue<=9 &&
+          row.rank>=1 && row.rank<=500 &&
+          row.percent>=0 && row.percent<=100
+        ){
+          out.push(row);
+          break;
+        }
+      }
+    }
   }
-  const uniq=new Map();for(const r of out)if(Number.isFinite(r.gradeValue))uniq.set(gradeStudentKey(r),r);
+
+  // 같은 학생은 한 번만 유지
+  const uniq=new Map();
+  for(const r of out){
+    uniq.set(gradeStudentKey(r),r);
+  }
   return [...uniq.values()];
 }
+
 async function handleGradeFile(file){
-  if(!file||!(/\.pdf$/i.test(file.name)||file.type==="application/pdf"))return toast("내신등급 PDF 파일을 선택해 주세요.");
-  $("#progressModal").classList.remove("hidden");$("#progressTitle").textContent="내신등급 PDF 분석 중...";
+  if(!file||!(/\.pdf$/i.test(file.name)||file.type==="application/pdf")){
+    $("#gradeUploadStatus").textContent="PDF 파일을 선택해 주세요.";
+    return toast("내신등급 PDF 파일을 선택해 주세요.");
+  }
+
+  $("#gradeUploadStatus").textContent=`${file.name} 분석 중...`;
+  $("#progressModal").classList.remove("hidden");
+  $("#progressTitle").textContent="내신등급 PDF 분석 중...";
+
   try{
-    const pages=await extractItems(file), parsed=parseGradePdfPages(pages);
-    if(!parsed.length)throw new Error("내신등급 학생 정보를 인식하지 못했습니다.");
-    gradeRows=parsed;gradeFilterMode="all";gradeRangeMin=null;gradeRangeMax=null;
-    $("#gradeMin").value="";$("#gradeMax").value="";$$(".grade-chip").forEach(b=>b.classList.toggle("active",b.dataset.grade==="all"));
-    render();toast(`내신등급 ${gradeRows.length}명 분석 완료`);
-  }catch(e){console.error(e);toast(e.message||"내신등급 PDF 분석에 실패했습니다.");}
-  finally{$("#progressModal").classList.add("hidden");}
+    const pages=await extractItems(file);
+    const parsed=parseGradePdfPages(pages);
+
+    if(!parsed.length){
+      $("#gradeUploadStatus").textContent="학생 성적을 인식하지 못했습니다.";
+      throw new Error("내신등급 학생 정보를 인식하지 못했습니다.");
+    }
+
+    gradeRows=parsed;
+    gradeFilterMode="all";
+    gradeRangeMin=null;
+    gradeRangeMax=null;
+    $("#gradeMin").value="";
+    $("#gradeMax").value="";
+    $$(".grade-chip").forEach(b=>b.classList.toggle("active",b.dataset.grade==="all"));
+
+    $("#gradeUploadStatus").textContent=`${file.name} · ${gradeRows.length}명 인식 완료`;
+    render();
+    toast(`내신등급 ${gradeRows.length}명 분석 완료`);
+  }catch(e){
+    console.error(e);
+    if(!$("#gradeUploadStatus").textContent.includes("인식하지")){
+      $("#gradeUploadStatus").textContent=`오류: ${e.message||"분석 실패"}`;
+    }
+    toast(e.message||"내신등급 PDF 분석에 실패했습니다.");
+  }finally{
+    $("#progressModal").classList.add("hidden");
+  }
 }
 
 function detectTimestamp(pages){
