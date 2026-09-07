@@ -79,6 +79,341 @@ function universityMatches(r){
   return u.includes(q) || q.includes(u);
 }
 
+async function extractItems(file){
+  const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+  const pages=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    $("#progressText").textContent=`${p}/${pdf.numPages}쪽 읽는 중`;
+    const page=await pdf.getPage(p), tc=await page.getTextContent();
+    const items=tc.items.filter(x=>String(x.str||"").trim()).map(x=>({
+      text:String(x.str||"").trim(),x:x.transform[4],y:x.transform[5],w:x.width||0,h:x.height||0
+    }));
+    pages.push(items);
+  }
+  return pages;
+}
+function textAt(items,pattern){
+  return items.find(i=>pattern.test(i.text));
+}
+function headerColumns(items){
+  const top=items.filter(i=>i.y>items.reduce((m,x)=>Math.max(m,x.y),0)-130);
+  const labels={
+    no:/^No$/i, grade:/^학년$/, classNo:/^반$/, studentNo:/^(번호|번\s*호)$/, studentName:/^이름$/,
+    university:/^대학명$/, department:/^모집단위$/, admissionType:/^전형유형$/, admissionDetail:/^세부유형$/
+  };
+  const found={};
+  for(const [k,re] of Object.entries(labels)){
+    let hit=top.find(i=>re.test(i.text.replace(/\s/g,"")));
+    if(hit) found[k]=hit.x+hit.w/2;
+  }
+
+  // 이 양식은 모든 페이지의 열 순서가 고정되어 있다.
+  // 일부 헤더가 PDF 내부에서 분리된 경우, 찾은 핵심 열 사이의 상대 위치로 보정한다.
+  if(found.no!=null && found.university!=null && found.department!=null){
+    const step=(found.department-found.university);
+    found.grade ??= found.no + step*(-7.0);
+  }
+  return found;
+}
+function makeBoundaries(columns){
+  const order=[
+    ["no",columns.no],["grade",columns.grade],["classNo",columns.classNo],
+    ["studentNo",columns.studentNo],["studentName",columns.studentName],
+    ["university",columns.university],["department",columns.department],
+    ["admissionType",columns.admissionType],["admissionDetail",columns.admissionDetail]
+  ].filter(x=>Number.isFinite(x[1])).sort((a,b)=>a[1]-b[1]);
+
+  const bounds={};
+  for(let i=0;i<order.length;i++){
+    const [name,x]=order[i];
+    const left=i===0?x-12:(order[i-1][1]+x)/2;
+    const right=i===order.length-1?x+50:(x+order[i+1][1])/2;
+    bounds[name]=[left,right];
+  }
+  return bounds;
+}
+function cellText(rowItems,bound){
+  if(!bound)return "";
+  const [l,r]=bound;
+  return cleanCell(rowItems.filter(i=>{
+    const cx=i.x+i.w/2; return cx>=l&&cx<r;
+  }).sort((a,b)=>Math.abs(b.y-a.y)>2?b.y-a.y:a.x-b.x).map(i=>i.text).join(""));
+}
+function findHeaderX(items, regexes){
+  const maxY=Math.max(...items.map(i=>i.y));
+  const candidates=items.filter(i=>i.y>maxY-125);
+  for(const re of regexes){
+    const found=candidates
+      .filter(i=>re.test(String(i.text||"").replace(/\s/g,"")))
+      .sort((a,b)=>b.y-a.y)[0];
+    if(found) return found.x+(found.w||0)/2;
+  }
+  return null;
+}
+
+function parsePage(items,pageNo){
+  if(!items.length) return [];
+
+  /*
+    v2.2
+    고정 비율을 사용하지 않고 PDF 자체의 표 헤더 위치를 매 페이지 읽는다.
+    이 보고서는 모든 페이지에 표 헤더가 반복되므로 이 방식이 가장 안정적이다.
+  */
+  const hx={
+    no:findHeaderX(items,[/^No$/i]),
+    grade:findHeaderX(items,[/^학년$/]),
+    classNo:findHeaderX(items,[/^반$/]),
+    studentNo:findHeaderX(items,[/^번$/, /^번호$/]),
+    studentName:findHeaderX(items,[/^이름$/]),
+    establishment:findHeaderX(items,[/^설립$/, /^설립구분$/]),
+    region:findHeaderX(items,[/^지역$/]),
+    track:findHeaderX(items,[/^계열$/]),
+    university:findHeaderX(items,[/^대학명$/]),
+    department:findHeaderX(items,[/^모집단위$/]),
+    count:findHeaderX(items,[/^모집인원$/, /^인원$/]),
+    admissionType:findHeaderX(items,[/^전형유형$/]),
+    admissionDetail:findHeaderX(items,[/^세부유형$/]),
+    selectionType:findHeaderX(items,[/^선발$/, /^선발유형$/])
+  };
+
+  const required=["no","grade","classNo","studentName","university","department"];
+  if(required.some(k=>!Number.isFinite(hx[k]))) return [];
+
+  // 번호 헤더가 '번/호'로 둘로 갈라지는 페이지는 반과 이름 사이에서 계산한다.
+  if(!Number.isFinite(hx.studentNo)){
+    hx.studentNo=(hx.classNo+hx.studentName)/2;
+  }
+
+  // 열 중심점을 왼쪽부터 정렬하고 인접 열의 중간점을 경계로 사용한다.
+  const columns=Object.entries(hx)
+    .filter(([,x])=>Number.isFinite(x))
+    .sort((a,b)=>a[1]-b[1]);
+
+  const bounds={};
+  columns.forEach(([name,x],i)=>{
+    const prev=columns[i-1]?.[1];
+    const next=columns[i+1]?.[1];
+    bounds[name]=[
+      Number.isFinite(prev)?(prev+x)/2:x-12,
+      Number.isFinite(next)?(x+next)/2:x+24
+    ];
+  });
+
+  const noColWidth=bounds.no[1]-bounds.no[0];
+  const headerY=Math.max(...items
+    .filter(i=>Math.abs((i.x+(i.w||0)/2)-hx.no)<Math.max(8,noColWidth))
+    .filter(i=>/^No$/i.test(String(i.text||"").trim()))
+    .map(i=>i.y));
+
+  // No 열에 위치하고 헤더 아래에 있는 1~20만 실제 데이터 행 번호로 취급한다.
+  const markers=items.filter(i=>{
+    const t=String(i.text||"").trim();
+    const cx=i.x+(i.w||0)/2;
+    return /^(?:[1-9]|1\d|20)$/.test(t)
+      && cx>=bounds.no[0] && cx<bounds.no[1]
+      && i.y<headerY-4;
+  }).sort((a,b)=>b.y-a.y);
+
+  if(!markers.length) return [];
+
+  const getCell=(rowItems,name)=>{
+    const b=bounds[name];
+    if(!b) return "";
+    return cleanCell(rowItems
+      .filter(it=>{
+        const cx=it.x+(it.w||0)/2;
+        return cx>=b[0] && cx<b[1];
+      })
+      .sort((a,b)=>{
+        if(Math.abs(b.y-a.y)>1.8) return b.y-a.y;
+        return a.x-b.x;
+      })
+      .map(i=>i.text)
+      .join(""));
+  };
+
+  const parsed=[];
+  for(let i=0;i<markers.length;i++){
+    const y=markers[i].y;
+    const upper=i===0 ? headerY-3 : (markers[i-1].y+y)/2;
+    const lower=i===markers.length-1 ? y-20 : (y+markers[i+1].y)/2;
+    const rowItems=items.filter(it=>it.y<upper && it.y>=lower);
+
+    let grade=getCell(rowItems,"grade");
+    let classNo=getCell(rowItems,"classNo");
+    let studentNo=getCell(rowItems,"studentNo");
+    let studentName=getCell(rowItems,"studentName");
+
+    grade=(grade.match(/[1-3]/)||[])[0]||"";
+    classNo=(classNo.match(/[1-9]/)||[])[0]||"";
+    studentNo=(studentNo.match(/\d{1,2}/)||[])[0]||"";
+    const nm=studentName.match(/[가-힣]{2,5}/);
+    studentName=nm?nm[0]:"";
+
+    const r={
+      pageNo,
+      no:Number(markers[i].text),
+      grade,
+      classNo,
+      studentNo,
+      studentName,
+      university:getCell(rowItems,"university"),
+      department:getCell(rowItems,"department"),
+      recruitCount:getCell(rowItems,"count"),
+      admissionType:getCell(rowItems,"admissionType"),
+      admissionDetail:getCell(rowItems,"admissionDetail")
+    };
+
+    const cnt=(String(r.recruitCount||"").match(/\d+/)||[])[0];
+    r.recruitCount=cnt||"";
+
+    const validIdentity=r.grade==="3"
+      && /^[1-9]$/.test(r.classNo)
+      && /^\d{1,2}$/.test(r.studentNo)
+      && /^[가-힣]{2,5}$/.test(r.studentName);
+
+    if(validIdentity && r.university.length>=2){
+      parsed.push(r);
+    }
+  }
+  return parsed;
+}
+
+
+function parseGradePdfPages(pages){
+  const out=[];
+
+  for(const items of pages){
+    if(!items?.length) continue;
+
+    // PDF.js가 주는 텍스트 조각을 실제 화면의 위→아래, 왼쪽→오른쪽 순서로 재정렬
+    const ordered=[...items].sort((a,b)=>{
+      const dy=(b.y??0)-(a.y??0);
+      if(Math.abs(dy)>2.2) return dy;
+      return (a.x??0)-(b.x??0);
+    });
+
+    // 가까운 y값끼리 같은 줄로 묶는다.
+    const lines=[];
+    for(const it of ordered){
+      const txt=String(it.text||"").trim();
+      if(!txt) continue;
+
+      let line=lines.find(l=>Math.abs(l.y-(it.y??0))<=2.2);
+      if(!line){
+        line={y:(it.y??0),items:[]};
+        lines.push(line);
+      }
+      line.items.push(it);
+    }
+
+    lines.sort((a,b)=>b.y-a.y);
+    const texts=lines.map(l=>
+      l.items
+        .sort((a,b)=>(a.x??0)-(b.x??0))
+        .map(i=>String(i.text||"").trim())
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g," ")
+        .trim()
+    );
+
+    // 한 학생이 여러 줄에 걸쳐 있어도 잡히도록 연속 1~6줄을 합쳐 검사
+    for(let i=0;i<texts.length;i++){
+      for(let span=1;span<=6 && i+span<=texts.length;span++){
+        const s=texts.slice(i,i+span).join(" ").replace(/\s+/g," ").trim();
+
+        // 예: 7차일반 3 3 12 신송화 4 2.03 1.42
+        const m=s.match(/(?:7차일반\s+)?3\s+([1-9])\s+(\d{1,2})\s+([가-힣]{2,5})\s+(\d{1,3})\s+(\d{1,3}(?:\.\d+)?)\s+(\d(?:\.\d+)?)/);
+        if(!m) continue;
+
+        const row={
+          grade:"3",
+          classNo:m[1],
+          studentNo:m[2],
+          studentName:m[3],
+          rank:Number(m[4]),
+          percent:Number(m[5]),
+          gradeValue:Number(m[6])
+        };
+
+        if(
+          Number.isFinite(row.rank) &&
+          Number.isFinite(row.percent) &&
+          Number.isFinite(row.gradeValue) &&
+          row.gradeValue>=1 && row.gradeValue<=9 &&
+          row.rank>=1 && row.rank<=500 &&
+          row.percent>=0 && row.percent<=100
+        ){
+          out.push(row);
+          break;
+        }
+      }
+    }
+  }
+
+  // 같은 학생은 한 번만 유지
+  const uniq=new Map();
+  for(const r of out){
+    uniq.set(gradeStudentKey(r),r);
+  }
+  return [...uniq.values()];
+}
+
+async function handleGradeFile(file){
+  if(!file||!(/\.pdf$/i.test(file.name)||file.type==="application/pdf")){
+    $("#gradeUploadStatus").textContent="PDF 파일을 선택해 주세요.";
+    return toast("내신등급 PDF 파일을 선택해 주세요.");
+  }
+
+  $("#gradeUploadStatus").textContent=`${file.name} 분석 중...`;
+  $("#progressModal").classList.remove("hidden");
+  $("#progressTitle").textContent="내신등급 PDF 분석 중...";
+
+  try{
+    const pages=await extractItems(file);
+    const parsed=parseGradePdfPages(pages);
+
+    if(!parsed.length){
+      $("#gradeUploadStatus").textContent="학생 성적을 인식하지 못했습니다.";
+      throw new Error("내신등급 학생 정보를 인식하지 못했습니다.");
+    }
+
+    gradeRows=parsed;
+    gradeFilterMode="all";
+    gradeRangeMin=null;
+    gradeRangeMax=null;
+    $("#gradeMin").value="";
+    $("#gradeMax").value="";
+    $$(".grade-chip").forEach(b=>b.classList.toggle("active",b.dataset.grade==="all"));
+
+    $("#gradeUploadStatus").textContent=`${file.name} · ${gradeRows.length}명 인식 완료`;
+    render();
+    toast(`내신등급 ${gradeRows.length}명 분석 완료`);
+  }catch(e){
+    console.error(e);
+    if(!$("#gradeUploadStatus").textContent.includes("인식하지")){
+      $("#gradeUploadStatus").textContent=`오류: ${e.message||"분석 실패"}`;
+    }
+    toast(e.message||"내신등급 PDF 분석에 실패했습니다.");
+  }finally{
+    $("#progressModal").classList.add("hidden");
+  }
+}
+
+function detectTimestamp(pages){
+  const txt=pages.slice(0,2).flat().map(x=>x.text).join(" ");
+  const m=txt.match(/(20\d{2})[-/.](\d{2})[-/.](\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+  return m?`${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`:new Date().toLocaleString("ko-KR");
+}
+function dedupeRows(list){
+  const seen=new Set();
+  return list.filter(r=>{
+    const k=[studentKey(r),exactKey(r)].join("::");
+    if(seen.has(k))return false;seen.add(k);return true;
+  });
+}
+
 function groupRisk(g){
   const gm=gradeMap();
   const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
