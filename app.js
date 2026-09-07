@@ -817,22 +817,35 @@ function exportExactDuplicateSheet(){
   }
 
   const csv="\ufeff"+lines.join("\n");
+  const supportLabel=supportTypeMode==="jonghap"?"학종":supportTypeMode==="gyogwa"?"교과":"전체";
+  const universityLabel=universitySearchText.trim()?`_${universitySearchText.trim()}`:"";
+  const filename=`완전중복_학생_환산점수입력용_${supportLabel}${universityLabel}.csv`;
+  const studentTotal=groups.reduce((sum,[,g])=>sum+new Set(g.map(studentKey)).size,0);
+
+  toast(`완전중복 ${groups.length}그룹 · 파일 생성 중...`);
+
+  // Whale/Chrome 계열에서 blob URL을 너무 빨리 해제하면 저장이 시작되지 않을 수 있어
+  // 다운로드 주소를 잠시 유지한다.
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
   a.href=url;
-
-  const supportLabel=supportTypeMode==="jonghap"?"학종":supportTypeMode==="gyogwa"?"교과":"전체";
-  const universityLabel=universitySearchText.trim()?`_${universitySearchText.trim()}`:"";
-  a.download=`완전중복_학생_환산점수입력용_${supportLabel}${universityLabel}.csv`;
-
+  a.download=filename;
+  a.style.display="none";
   document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 
-  const studentTotal=groups.reduce((sum,[,g])=>sum+new Set(g.map(studentKey)).size,0);
-  toast(`완전중복 ${groups.length}그룹 · 학생 ${studentTotal}명 내보내기 완료`);
+  // 사용자의 실제 클릭 이벤트 흐름 안에서 실행
+  requestAnimationFrame(()=>{
+    a.click();
+    setTimeout(()=>{
+      a.remove();
+      URL.revokeObjectURL(url);
+    },3000);
+  });
+
+  setTimeout(()=>{
+    toast(`완전중복 ${groups.length}그룹 · 학생 ${studentTotal}명 내보내기 완료`);
+  },300);
 }
 
 function exportCsv(){
@@ -922,6 +935,17 @@ $$(".change-card").forEach(b=>b.onclick=()=>{changeMode=b.dataset.change;renderC
 $("#newCard").onclick=()=>{if(previousSnapshot){changeMode="new";$("#changeSection").scrollIntoView({behavior:"smooth"})}else toast("이전 분석본이 있어야 새 중복을 비교할 수 있습니다.")};
 $("#exactCard").onclick=()=>{currentView="exact";render()};$("#deptCard").onclick=()=>{currentView="department";render()};
 $("#editModeBtn").onclick=openEdit;$("#editCloseBtn").onclick=closeEdit;$("#editCancelBtn").onclick=closeEdit;$("#editSaveBtn").onclick=saveEdit;$("#exportBtn").onclick=exportCsv;
-$("#exportExactSheetBtn").onclick=exportExactDuplicateSheet;
+const exportExactBtn=$("#exportExactSheetBtn");
+if(exportExactBtn){
+  exportExactBtn.addEventListener("click",e=>{
+    e.preventDefault();
+    try{
+      exportExactDuplicateSheet();
+    }catch(err){
+      console.error(err);
+      toast(`내보내기 오류: ${err?.message||"알 수 없는 오류"}`);
+    }
+  });
+}
 $("#resetBtn").onclick=()=>{if(confirm("이 브라우저에 저장된 이전 비교자료를 초기화할까요?")){localStorage.removeItem(STORAGE_KEY);previousSnapshot=null;render();toast("비교자료를 초기화했습니다.")}};
 $("#editModal").onclick=e=>{if(e.target===$("#editModal"))closeEdit()};

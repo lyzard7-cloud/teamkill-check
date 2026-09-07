@@ -392,3 +392,8 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 .exact-export-btn:hover{
   background:#eaf6ec !important;
 }
+
+/* v3.9.1 내보내기 버튼 안정화 */
+.exact-export-btn:active{
+  transform:translateY(1px);
+}
