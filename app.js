@@ -183,6 +183,7 @@ function parsePage(items,pageNo){
     essayDate:findHeaderX(items,[/^논술일자$/, /^논술$/]),
     aptitudeDate:findHeaderX(items,[/^적성일자$/, /^적성$/]),
     announceDate:findHeaderX(items,[/^발표일$/, /^발표$/]),
+    myGrade:findHeaderX(items,[/^내등급$/, /^내 등급$/]),
     myScore:findHeaderX(items,[/^내점수$/, /^내 점수$/])
   };
 
@@ -203,9 +204,10 @@ function parsePage(items,pageNo){
   columns.forEach(([name,x],i)=>{
     const prev=columns[i-1]?.[1];
     const next=columns[i+1]?.[1];
+    const pageRight=Math.max(...items.map(it=>it.x+(it.w||0)));
     bounds[name]=[
       Number.isFinite(prev)?(prev+x)/2:x-12,
-      Number.isFinite(next)?(x+next)/2:x+24
+      Number.isFinite(next)?(x+next)/2:pageRight+4
     ];
   });
 
@@ -281,52 +283,30 @@ function parsePage(items,pageNo){
 
 
   function extractMyScore(rowItems){
-    // 내점수는 이 PDF에서 우측 끝의 독립 열이다.
-    // 발표일 등 날짜열과 학생 신상정보의 숫자가 섞이지 않도록
-    // '내점수' 헤더 중심을 기준으로 매우 좁은 범위만 읽는다.
-    if(!Number.isFinite(hx.myScore)) return "";
+    // 내점수는 표의 독립 열이다.
+    // 모든 헤더 x좌표를 정렬해 만든 bounds.myScore 안의 값만 사용한다.
+    const b=bounds.myScore;
+    if(!b) return "";
 
-    const prevCandidates=[
-      hx.announceDate,hx.aptitudeDate,hx.essayDate,hx.practicalDate,
-      hx.interviewDate,hx.receiptDate,hx.finalType,hx.selectionType
-    ].filter(Number.isFinite).filter(x=>x<hx.myScore);
-
-    const prevX=prevCandidates.length?Math.max(...prevCandidates):hx.myScore-55;
-    const left=(prevX+hx.myScore)/2;
-    const right=hx.myScore+38;
-
-    const candidates=rowItems
+    const tokens=rowItems
       .filter(it=>{
         const cx=it.x+(it.w||0)/2;
-        return cx>=left && cx<=right;
+        return cx>=b[0] && cx<b[1];
       })
       .sort((a,b)=>{
-        // 같은 셀 안에서 줄바꿈된 경우 위→아래, 왼쪽→오른쪽
         if(Math.abs(b.y-a.y)>1.8) return b.y-a.y;
         return a.x-b.x;
       })
       .map(it=>String(it.text||"").trim())
       .filter(Boolean);
 
-    // 날짜(2026-...)는 제외하고, 소수/정수 점수만 허용
-    for(const token of candidates){
-      const clean=token.replace(/,/g,"");
-      if(/^-?\d+(?:\.\d+)?$/.test(clean)){
-        const n=Number(clean);
-        // 내점수는 0도 유효(학종 등)
-        if(Number.isFinite(n) && n>=0 && n<100000) return String(n);
-      }
-    }
+    // 값이 한 조각이면 그대로, 여러 조각이면 붙여서 숫자화
+    const joined=tokens.join("").replace(/,/g,"").replace(/\s+/g,"");
+    const m=joined.match(/^-?\d+(?:\.\d+)?$/) || joined.match(/-?\d+(?:\.\d+)?/);
+    if(!m) return "";
 
-    // 텍스트 조각이 "991." + "98"처럼 나뉜 예외 대비
-    const joined=candidates.join("").replace(/,/g,"");
-    const m=joined.match(/-?\d+(?:\.\d+)?/);
-    if(m){
-      const n=Number(m[0]);
-      if(Number.isFinite(n) && n>=0 && n<100000) return String(n);
-    }
-
-    return "";
+    const n=Number(m[0]);
+    return Number.isFinite(n) && n>=0 && n<100000 ? String(n) : "";
   }
 
   const parsed=[];
@@ -359,6 +339,7 @@ function parsePage(items,pageNo){
       recruitCount:extractRecruitCount(rowItems),
       admissionType:getCell(rowItems,"admissionType"),
       admissionDetail:getCell(rowItems,"admissionDetail"),
+      pdfMyGrade:getCell(rowItems,"myGrade"),
       myScore:extractMyScore(rowItems)
     };
 
@@ -800,7 +781,7 @@ function renderChanges(){
   }).join("");
 }
 function renderAll(){
-  $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.recruitCount||"")}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td><td>${esc(r.myScore||"")}</td></tr>`).join("");
+  $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.recruitCount||"")}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td><td>${esc(r.pdfMyGrade||"")}</td><td>${esc(r.myScore||"")}</td></tr>`).join("");
 }
 function openEdit(){
   editDraft=rows.map(r=>({...r}));
