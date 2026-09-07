@@ -175,7 +175,8 @@ function parsePage(items,pageNo){
     minimum:findHeaderX(items,[/^수능최저유무$/, /^수능최저$/, /^최저유무$/]),
     admissionType:findHeaderX(items,[/^전형유형$/]),
     admissionDetail:findHeaderX(items,[/^세부유형$/]),
-    selectionType:findHeaderX(items,[/^선발$/, /^선발유형$/])
+    selectionType:findHeaderX(items,[/^선발$/, /^선발유형$/]),
+    myScore:findHeaderX(items,[/^내점수$/, /^내 점수$/])
   };
 
   const required=["no","grade","classNo","studentName","university","department"];
@@ -300,8 +301,13 @@ function parsePage(items,pageNo){
       department:getCell(rowItems,"department"),
       recruitCount:extractRecruitCount(rowItems),
       admissionType:getCell(rowItems,"admissionType"),
-      admissionDetail:getCell(rowItems,"admissionDetail")
+      admissionDetail:getCell(rowItems,"admissionDetail"),
+      myScore:getCell(rowItems,"myScore")
     };
+
+    // '내점수'는 대학별 교과 환산점수. 0, 76.02, 899.83, 992.83 등 대학별 척도를 그대로 유지한다.
+    const scoreMatch=String(r.myScore||"").replace(/,/g,"").match(/-?\d+(?:\.\d+)?/);
+    r.myScore=scoreMatch?scoreMatch[0]:"";
 
     const validIdentity=r.grade==="3"
       && /^[1-9]$/.test(r.classNo)
@@ -651,10 +657,16 @@ function renderPeople(g){
       ? `<span class="grade-badge">내신 ${gradeValue.toFixed(2)}</span>`
       : `<span class="grade-badge grade-missing">내신 미연결</span>`;
 
+    const scoreValue=String(r.myScore??"").trim();
+    const scoreBadge=scoreValue!==""
+      ? `<span class="score-badge">환산 ${esc(scoreValue)}</span>`
+      : `<span class="score-badge score-missing">환산 미확인</span>`;
+
     return `<div class="person">
       <div class="person-main">
         <strong>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")} · ${r.studentName}`)}</strong>
         ${gradeBadge}
+        ${scoreBadge}
       </div>
       <span>${esc(r.university)} / ${esc(r.department)} / ${esc(r.admissionType)} / ${esc(r.admissionDetail)}</span>
     </div>`;
@@ -735,11 +747,11 @@ function renderChanges(){
   }).join("");
 }
 function renderAll(){
-  $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.recruitCount||"")}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td></tr>`).join("");
+  $("#rowsBody").innerHTML=activeRows().map(r=>`<tr><td>${esc(`${r.grade}${String(r.classNo).padStart(2,"0")}${String(r.studentNo).padStart(2,"0")}`)}</td><td>${esc(r.studentName)}</td><td>${esc(r.university)}</td><td>${esc(r.department)}</td><td>${esc(r.recruitCount||"")}</td><td>${esc(r.admissionType)}</td><td>${esc(r.admissionDetail)}</td><td>${esc(r.myScore||"")}</td></tr>`).join("");
 }
 function openEdit(){
   editDraft=rows.map(r=>({...r}));
-  $("#editRows").innerHTML=editDraft.map((r,i)=>`<div class="edit-row" data-index="${i}"><label>학번<input data-field="studentNoDisplay" value="${esc(`${r.grade}-${r.classNo}-${r.studentNo}`)}" disabled></label><label>이름<input data-field="studentName" value="${esc(r.studentName)}"></label><label>대학<input data-field="university" value="${esc(r.university)}"></label><label>모집단위<input data-field="department" value="${esc(r.department)}"></label><label>모집인원<input data-field="recruitCount" value="${esc(r.recruitCount||"")}"></label><label>전형유형<input data-field="admissionType" value="${esc(r.admissionType)}"></label><label>세부유형<input data-field="admissionDetail" value="${esc(r.admissionDetail)}"></label><button class="delete-row" data-index="${i}">×</button></div>`).join("");
+  $("#editRows").innerHTML=editDraft.map((r,i)=>`<div class="edit-row" data-index="${i}"><label>학번<input data-field="studentNoDisplay" value="${esc(`${r.grade}-${r.classNo}-${r.studentNo}`)}" disabled></label><label>이름<input data-field="studentName" value="${esc(r.studentName)}"></label><label>대학<input data-field="university" value="${esc(r.university)}"></label><label>모집단위<input data-field="department" value="${esc(r.department)}"></label><label>모집인원<input data-field="recruitCount" value="${esc(r.recruitCount||"")}"></label><label>전형유형<input data-field="admissionType" value="${esc(r.admissionType)}"></label><label>세부유형<input data-field="admissionDetail" value="${esc(r.admissionDetail)}"></label><label>환산점수<input data-field="myScore" value="${esc(r.myScore||"")}"></label><button class="delete-row" data-index="${i}">×</button></div>`).join("");
   $("#editModal").classList.remove("hidden");
   $$(".delete-row").forEach(b=>b.onclick=()=>{editDraft[+b.dataset.index].__delete=true;b.closest(".edit-row").remove()});
 }
@@ -809,7 +821,7 @@ function exportExactDuplicateSheet(){
         r.studentNo||"",
         r.studentName||"",
         Number.isFinite(gradeValue)?gradeValue.toFixed(2):"",
-        "",   // 대학 환산점수 수기 입력용
+        r.myScore||"",   // 관심대학 리스트의 '내점수' = 대학별 환산점수
         ""    // 메모
       ].map(q).join(","));
     }
@@ -819,7 +831,7 @@ function exportExactDuplicateSheet(){
   const csv="\ufeff"+lines.join("\n");
   const supportLabel=supportTypeMode==="jonghap"?"학종":supportTypeMode==="gyogwa"?"교과":"전체";
   const universityLabel=universitySearchText.trim()?`_${universitySearchText.trim()}`:"";
-  const filename=`완전중복_학생_환산점수입력용_${supportLabel}${universityLabel}.csv`;
+  const filename=`완전중복_학생_환산점수포함_${supportLabel}${universityLabel}.csv`;
   const studentTotal=groups.reduce((sum,[,g])=>sum+new Set(g.map(studentKey)).size,0);
 
   toast(`완전중복 ${groups.length}그룹 · 파일 생성 중...`);
@@ -849,8 +861,8 @@ function exportExactDuplicateSheet(){
 }
 
 function exportCsv(){
-  const q=v=>`"${String(v??"").replaceAll('"','""')}"`, head=["학년","반","번호","이름","대학","모집단위","모집인원","전형유형","세부유형"];
-  const csv="\ufeff"+[head.map(q).join(","),...rows.map(r=>[r.grade,r.classNo,r.studentNo,r.studentName,r.university,r.department,r.recruitCount||"",r.admissionType,r.admissionDetail].map(q).join(","))].join("\n");
+  const q=v=>`"${String(v??"").replaceAll('"','""')}"`, head=["학년","반","번호","이름","대학","모집단위","모집인원","전형유형","세부유형","환산점수(내점수)"];
+  const csv="\ufeff"+[head.map(q).join(","),...rows.map(r=>[r.grade,r.classNo,r.studentNo,r.studentName,r.university,r.department,r.recruitCount||"",r.admissionType,r.admissionDetail,r.myScore||""].map(q).join(","))].join("\n");
   const u=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})),a=document.createElement("a");a.href=u;a.download="관심대학_팀킬분석.csv";a.click();URL.revokeObjectURL(u);
 }
 
