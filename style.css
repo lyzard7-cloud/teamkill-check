@@ -417,3 +417,5 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   background:#fff8eb;
   color:#896f40;
 }
+
+/* v3.10.1 내점수 열 좌표 보정 */

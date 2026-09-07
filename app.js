@@ -176,6 +176,13 @@ function parsePage(items,pageNo){
     admissionType:findHeaderX(items,[/^전형유형$/]),
     admissionDetail:findHeaderX(items,[/^세부유형$/]),
     selectionType:findHeaderX(items,[/^선발$/, /^선발유형$/]),
+    finalType:findHeaderX(items,[/^최종$/]),
+    receiptDate:findHeaderX(items,[/^접수일자$/, /^접수$/]),
+    interviewDate:findHeaderX(items,[/^면접일자$/, /^면접$/]),
+    practicalDate:findHeaderX(items,[/^실기일자$/, /^실기$/]),
+    essayDate:findHeaderX(items,[/^논술일자$/, /^논술$/]),
+    aptitudeDate:findHeaderX(items,[/^적성일자$/, /^적성$/]),
+    announceDate:findHeaderX(items,[/^발표일$/, /^발표$/]),
     myScore:findHeaderX(items,[/^내점수$/, /^내 점수$/])
   };
 
@@ -272,6 +279,56 @@ function parsePage(items,pageNo){
     return nums.length?String(nums[0]):"";
   }
 
+
+  function extractMyScore(rowItems){
+    // 내점수는 이 PDF에서 우측 끝의 독립 열이다.
+    // 발표일 등 날짜열과 학생 신상정보의 숫자가 섞이지 않도록
+    // '내점수' 헤더 중심을 기준으로 매우 좁은 범위만 읽는다.
+    if(!Number.isFinite(hx.myScore)) return "";
+
+    const prevCandidates=[
+      hx.announceDate,hx.aptitudeDate,hx.essayDate,hx.practicalDate,
+      hx.interviewDate,hx.receiptDate,hx.finalType,hx.selectionType
+    ].filter(Number.isFinite).filter(x=>x<hx.myScore);
+
+    const prevX=prevCandidates.length?Math.max(...prevCandidates):hx.myScore-55;
+    const left=(prevX+hx.myScore)/2;
+    const right=hx.myScore+38;
+
+    const candidates=rowItems
+      .filter(it=>{
+        const cx=it.x+(it.w||0)/2;
+        return cx>=left && cx<=right;
+      })
+      .sort((a,b)=>{
+        // 같은 셀 안에서 줄바꿈된 경우 위→아래, 왼쪽→오른쪽
+        if(Math.abs(b.y-a.y)>1.8) return b.y-a.y;
+        return a.x-b.x;
+      })
+      .map(it=>String(it.text||"").trim())
+      .filter(Boolean);
+
+    // 날짜(2026-...)는 제외하고, 소수/정수 점수만 허용
+    for(const token of candidates){
+      const clean=token.replace(/,/g,"");
+      if(/^-?\d+(?:\.\d+)?$/.test(clean)){
+        const n=Number(clean);
+        // 내점수는 0도 유효(학종 등)
+        if(Number.isFinite(n) && n>=0 && n<100000) return String(n);
+      }
+    }
+
+    // 텍스트 조각이 "991." + "98"처럼 나뉜 예외 대비
+    const joined=candidates.join("").replace(/,/g,"");
+    const m=joined.match(/-?\d+(?:\.\d+)?/);
+    if(m){
+      const n=Number(m[0]);
+      if(Number.isFinite(n) && n>=0 && n<100000) return String(n);
+    }
+
+    return "";
+  }
+
   const parsed=[];
   for(let i=0;i<markers.length;i++){
     const y=markers[i].y;
@@ -302,12 +359,8 @@ function parsePage(items,pageNo){
       recruitCount:extractRecruitCount(rowItems),
       admissionType:getCell(rowItems,"admissionType"),
       admissionDetail:getCell(rowItems,"admissionDetail"),
-      myScore:getCell(rowItems,"myScore")
+      myScore:extractMyScore(rowItems)
     };
-
-    // '내점수'는 대학별 교과 환산점수. 0, 76.02, 899.83, 992.83 등 대학별 척도를 그대로 유지한다.
-    const scoreMatch=String(r.myScore||"").replace(/,/g,"").match(/-?\d+(?:\.\d+)?/);
-    r.myScore=scoreMatch?scoreMatch[0]:"";
 
     const validIdentity=r.grade==="3"
       && /^[1-9]$/.test(r.classNo)
