@@ -171,6 +171,8 @@ function parsePage(items,pageNo){
     university:findHeaderX(items,[/^대학명$/]),
     department:findHeaderX(items,[/^모집단위$/]),
     count:findHeaderX(items,[/^모집인원$/, /^인원$/]),
+    reflect:findHeaderX(items,[/^반영요소$/, /^반영$/]),
+    minimum:findHeaderX(items,[/^수능최저유무$/, /^수능최저$/, /^최저유무$/]),
     admissionType:findHeaderX(items,[/^전형유형$/]),
     admissionDetail:findHeaderX(items,[/^세부유형$/]),
     selectionType:findHeaderX(items,[/^선발$/, /^선발유형$/])
@@ -232,6 +234,43 @@ function parsePage(items,pageNo){
       .join(""));
   };
 
+  function extractRecruitCount(rowItems){
+    // 우선 모집인원 헤더의 실제 열 경계만 사용한다.
+    let raw=getCell(rowItems,"count");
+    let nums=(String(raw||"").match(/\d+/g)||[])
+      .map(Number)
+      .filter(n=>n>=1 && n<=500);
+
+    // 하나만 읽혔다면 그대로 사용
+    if(nums.length===1) return String(nums[0]);
+
+    // 여러 숫자가 섞인 경우(예: '20 학생부 80%')에는
+    // 모집단위 바로 오른쪽, 반영요소 바로 왼쪽의 가장 왼쪽 숫자를 사용한다.
+    const deptX=hx.department;
+    const reflectX=Number.isFinite(hx.reflect)?hx.reflect:
+      (Number.isFinite(hx.minimum)?hx.minimum:
+       (Number.isFinite(hx.admissionType)?hx.admissionType:null));
+
+    if(Number.isFinite(deptX) && Number.isFinite(reflectX)){
+      const candidates=rowItems
+        .filter(it=>{
+          const cx=it.x+(it.w||0)/2;
+          return cx>deptX && cx<reflectX;
+        })
+        .filter(it=>/^\d{1,3}$/.test(String(it.text||"").trim()))
+        .sort((a,b)=>a.x-b.x);
+
+      if(candidates.length){
+        const n=Number(candidates[0].text);
+        if(n>=1 && n<=500) return String(n);
+      }
+    }
+
+    // 마지막 안전장치: 여러 숫자가 있으면 가장 작은 값이 아니라
+    // 실제 열 안의 첫 번째 값을 사용한다.
+    return nums.length?String(nums[0]):"";
+  }
+
   const parsed=[];
   for(let i=0;i<markers.length;i++){
     const y=markers[i].y;
@@ -259,13 +298,10 @@ function parsePage(items,pageNo){
       studentName,
       university:getCell(rowItems,"university"),
       department:getCell(rowItems,"department"),
-      recruitCount:getCell(rowItems,"count"),
+      recruitCount:extractRecruitCount(rowItems),
       admissionType:getCell(rowItems,"admissionType"),
       admissionDetail:getCell(rowItems,"admissionDetail")
     };
-
-    const cnt=(String(r.recruitCount||"").match(/\d+/)||[])[0];
-    r.recruitCount=cnt||"";
 
     const validIdentity=r.grade==="3"
       && /^[1-9]$/.test(r.classNo)

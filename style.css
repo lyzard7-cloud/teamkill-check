@@ -375,3 +375,9 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 @media(max-width:700px){
   .topbar-actions{align-self:stretch;justify-content:flex-end}
 }
+
+/* v3.8.2 모집인원 오인식 수정 */
+.recruit-count-note{
+  font-size:9px;
+  color:#6c7a8c;
+}
