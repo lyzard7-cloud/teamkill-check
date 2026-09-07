@@ -381,3 +381,14 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
   font-size:9px;
   color:#6c7a8c;
 }
+
+/* v3.9 완전중복 스프레드시트 내보내기 */
+.exact-export-btn{
+  border-color:#bcd2bf !important;
+  background:#f2faf3 !important;
+  color:#3f7448 !important;
+  font-weight:900 !important;
+}
+.exact-export-btn:hover{
+  background:#eaf6ec !important;
+}

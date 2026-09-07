@@ -748,6 +748,93 @@ function saveEdit(){
   $$("#editRows .edit-row").forEach(el=>{const i=+el.dataset.index;el.querySelectorAll("input:not(:disabled)").forEach(inp=>editDraft[i][inp.dataset.field]=inp.value.trim())});
   rows=editDraft.filter(r=>!r.__delete);closeEdit();render();toast("수정내용을 반영했습니다.");
 }
+
+function exportExactDuplicateSheet(){
+  // 현재 필터가 적용된 상태의 완전중복 그룹만 내보낸다.
+  const groups=exactGroups();
+  if(!groups.length){
+    toast("현재 조건에서 완전 중복된 학생이 없습니다.");
+    return;
+  }
+
+  const gm=gradeMap();
+  const q=v=>`"${String(v??"").replaceAll('"','""')}"`;
+
+  const head=[
+    "중복그룹",
+    "대학",
+    "모집단위",
+    "모집인원",
+    "전형유형",
+    "세부유형",
+    "학번",
+    "반",
+    "번호",
+    "이름",
+    "내신등급",
+    "대학 환산점수",
+    "메모"
+  ];
+
+  const lines=[head.map(q).join(",")];
+  let groupNo=1;
+
+  for(const [,g] of groups){
+    const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
+    const baseRow=g[0];
+
+    // 보기 편하게 내신순 정렬
+    unique.sort((a,b)=>{
+      const ga=Number((a.gradeInfo||gm.get(studentKey(a)))?.gradeValue);
+      const gb=Number((b.gradeInfo||gm.get(studentKey(b)))?.gradeValue);
+      if(Number.isFinite(ga)&&Number.isFinite(gb)) return ga-gb;
+      if(Number.isFinite(ga)) return -1;
+      if(Number.isFinite(gb)) return 1;
+      return studentKey(a).localeCompare(studentKey(b),"ko");
+    });
+
+    for(const r of unique){
+      const gi=r.gradeInfo||gm.get(studentKey(r));
+      const gradeValue=Number(gi?.gradeValue);
+
+      lines.push([
+        groupNo,
+        baseRow.university||"",
+        baseRow.department||"",
+        baseRow.recruitCount||"",
+        baseRow.admissionType||"",
+        baseRow.admissionDetail||"",
+        schoolNo(r),
+        r.classNo||"",
+        r.studentNo||"",
+        r.studentName||"",
+        Number.isFinite(gradeValue)?gradeValue.toFixed(2):"",
+        "",   // 대학 환산점수 수기 입력용
+        ""    // 메모
+      ].map(q).join(","));
+    }
+    groupNo++;
+  }
+
+  const csv="\ufeff"+lines.join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+
+  const supportLabel=supportTypeMode==="jonghap"?"학종":supportTypeMode==="gyogwa"?"교과":"전체";
+  const universityLabel=universitySearchText.trim()?`_${universitySearchText.trim()}`:"";
+  a.download=`완전중복_학생_환산점수입력용_${supportLabel}${universityLabel}.csv`;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  const studentTotal=groups.reduce((sum,[,g])=>sum+new Set(g.map(studentKey)).size,0);
+  toast(`완전중복 ${groups.length}그룹 · 학생 ${studentTotal}명 내보내기 완료`);
+}
+
 function exportCsv(){
   const q=v=>`"${String(v??"").replaceAll('"','""')}"`, head=["학년","반","번호","이름","대학","모집단위","모집인원","전형유형","세부유형"];
   const csv="\ufeff"+[head.map(q).join(","),...rows.map(r=>[r.grade,r.classNo,r.studentNo,r.studentName,r.university,r.department,r.recruitCount||"",r.admissionType,r.admissionDetail].map(q).join(","))].join("\n");
@@ -835,5 +922,6 @@ $$(".change-card").forEach(b=>b.onclick=()=>{changeMode=b.dataset.change;renderC
 $("#newCard").onclick=()=>{if(previousSnapshot){changeMode="new";$("#changeSection").scrollIntoView({behavior:"smooth"})}else toast("이전 분석본이 있어야 새 중복을 비교할 수 있습니다.")};
 $("#exactCard").onclick=()=>{currentView="exact";render()};$("#deptCard").onclick=()=>{currentView="department";render()};
 $("#editModeBtn").onclick=openEdit;$("#editCloseBtn").onclick=closeEdit;$("#editCancelBtn").onclick=closeEdit;$("#editSaveBtn").onclick=saveEdit;$("#exportBtn").onclick=exportCsv;
+$("#exportExactSheetBtn").onclick=exportExactDuplicateSheet;
 $("#resetBtn").onclick=()=>{if(confirm("이 브라우저에 저장된 이전 비교자료를 초기화할까요?")){localStorage.removeItem(STORAGE_KEY);previousSnapshot=null;render();toast("비교자료를 초기화했습니다.")}};
 $("#editModal").onclick=e=>{if(e.target===$("#editModal"))closeEdit()};
