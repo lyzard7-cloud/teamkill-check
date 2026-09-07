@@ -138,13 +138,36 @@
       <div id="filterStatusLine" class="filter-status-line">전체 전형 · 전체 대학</div>
 
       <div class="risk-filter-row">
-        <span class="filter-title">팀킬 위험도</span>
+        <span class="filter-title">팀킬 점검</span>
         <button class="risk-chip active" data-risk="all" type="button">전체</button>
-        <button class="risk-chip high" data-risk="high" type="button">높음</button>
-        <button class="risk-chip medium" data-risk="medium" type="button">보통</button>
-        <button class="risk-chip low" data-risk="low" type="button">낮음</button>
+        <button class="risk-chip high" data-risk="high" type="button">교과 높음</button>
+        <button class="risk-chip medium" data-risk="medium" type="button">교과 보통</button>
+        <button class="risk-chip low" data-risk="low" type="button">교과 낮음</button>
+        <button class="risk-chip review" data-risk="review" type="button">학종 참고</button>
         <button class="risk-chip unknown" data-risk="unknown" type="button">판단 보류</button>
       </div>
+
+      <section class="priority-check-panel">
+        <div class="priority-check-title">
+          <div>
+            <span class="eyebrow">빠른 확인</span>
+            <h3>우선 점검</h3>
+          </div>
+          <span class="priority-note">현재 선택한 등급·반·대학 필터 기준</span>
+        </div>
+        <div class="priority-grid">
+          <button id="priorityGyogwaBtn" class="priority-card" type="button">
+            <span>교과 위험도 높음</span>
+            <strong id="priorityGyogwaCount">0</strong>
+            <small>그룹</small>
+          </button>
+          <button id="priorityJonghapBtn" class="priority-card" type="button">
+            <span>학종 중복 참고</span>
+            <strong id="priorityJonghapCount">0</strong>
+            <small>그룹</small>
+          </button>
+        </div>
+      </section>
 
       <div class="grade-analysis-summary">
         <div><span>선택 학생</span><strong id="filteredStudentCount">0</strong><small>명</small></div>
@@ -175,7 +198,7 @@
     <section id="allRowsSection" class="hidden">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>학번</th><th>이름</th><th>대학</th><th>모집단위</th><th>전형유형</th><th>세부유형</th></tr></thead>
+          <thead><tr><th>학번</th><th>이름</th><th>대학</th><th>모집단위</th><th>모집인원</th><th>전형유형</th><th>세부유형</th></tr></thead>
           <tbody id="rowsBody"></tbody>
         </table>
       </div>

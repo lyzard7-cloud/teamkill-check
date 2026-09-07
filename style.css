@@ -274,3 +274,71 @@ button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
 .duplicate-group.risk-medium{border-left:4px solid #d5a84f}
 .duplicate-group.risk-low{border-left:4px solid #72a883}
 .duplicate-group.risk-unknown{border-left:4px solid #aab3bf}
+
+/* v3.7 교과/학종 위험도 분리 */
+.risk-chip.review.active{
+  background:#f2efff;
+  border-color:#cfc5ec;
+  color:#66559a;
+}
+.risk-badge.review{
+  background:#f2efff;
+  border:1px solid #cfc5ec;
+  color:#66559a;
+}
+.duplicate-group.risk-review{border-left:4px solid #9481c7}
+.risk-note{
+  margin:8px 0 10px;
+  padding:7px 9px;
+  border-radius:9px;
+  font-size:9px;
+  font-weight:700;
+}
+.risk-note.review{
+  background:#f7f5ff;
+  color:#6d6096;
+  border:1px solid #ded6f3;
+}
+.risk-note.unknown{
+  background:#f6f7f9;
+  color:#737d89;
+  border:1px solid #e0e4e9;
+}
+.priority-check-panel{
+  margin-top:12px;
+  padding:12px;
+  border:1px solid #e3e8ef;
+  border-radius:14px;
+  background:#fff;
+}
+.priority-check-title{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-end;
+}
+.priority-check-title h3{margin:2px 0 0;font-size:14px}
+.priority-note{font-size:9px;color:#7a8798}
+.priority-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+  margin-top:10px;
+}
+.priority-card{
+  text-align:left;
+  border:1px solid #dfe5ed;
+  border-radius:12px;
+  background:#fbfcfe;
+  padding:12px;
+  cursor:pointer;
+}
+.priority-card span{display:block;font-size:10px;color:#68768a;font-weight:800}
+.priority-card strong{display:inline-block;margin-top:5px;font-size:24px}
+.priority-card small{font-size:9px;color:#8793a1;margin-left:3px}
+.priority-card:first-child{background:#fff8f8;border-color:#ead0d0}
+.priority-card:last-child{background:#f8f6ff;border-color:#ddd5f2}
+@media(max-width:700px){.priority-grid{grid-template-columns:1fr}}
+
+/* v3.8 모집인원 표시 */
+.dup-head h3{line-height:1.45}
