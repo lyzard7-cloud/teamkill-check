@@ -684,6 +684,27 @@ function renderPeople(g){
   const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
   const gm=gradeMap();
 
+  // 중복 학생은 대학별 환산점수 높은 순으로 정렬.
+  // 환산점수가 같으면 내신등급이 좋은 순, 이후 학번순.
+  unique.sort((a,b)=>{
+    const sa=Number(String(a.myScore??"").replace(/,/g,""));
+    const sb=Number(String(b.myScore??"").replace(/,/g,""));
+    const hasA=String(a.myScore??"").trim()!=="" && Number.isFinite(sa);
+    const hasB=String(b.myScore??"").trim()!=="" && Number.isFinite(sb);
+
+    if(hasA && hasB && sa!==sb) return sb-sa;
+    if(hasA && !hasB) return -1;
+    if(!hasA && hasB) return 1;
+
+    const ga=Number((a.gradeInfo||gm.get(studentKey(a)))?.gradeValue);
+    const gb=Number((b.gradeInfo||gm.get(studentKey(b)))?.gradeValue);
+    if(Number.isFinite(ga) && Number.isFinite(gb) && ga!==gb) return ga-gb;
+    if(Number.isFinite(ga) && !Number.isFinite(gb)) return -1;
+    if(!Number.isFinite(ga) && Number.isFinite(gb)) return 1;
+
+    return schoolNo(a).localeCompare(schoolNo(b),"ko");
+  });
+
   return unique.map(r=>{
     const gi=r.gradeInfo || gm.get(studentKey(r));
     const gradeValue=Number(gi?.gradeValue);
@@ -829,14 +850,24 @@ function exportExactDuplicateSheet(){
     const unique=[...new Map(g.map(r=>[studentKey(r),r])).values()];
     const baseRow=g[0];
 
-    // 보기 편하게 내신순 정렬
+    // 화면과 동일하게 환산점수 높은 순으로 정렬
     unique.sort((a,b)=>{
+      const sa=Number(String(a.myScore??"").replace(/,/g,""));
+      const sb=Number(String(b.myScore??"").replace(/,/g,""));
+      const hasA=String(a.myScore??"").trim()!=="" && Number.isFinite(sa);
+      const hasB=String(b.myScore??"").trim()!=="" && Number.isFinite(sb);
+
+      if(hasA&&hasB&&sa!==sb) return sb-sa;
+      if(hasA&&!hasB) return -1;
+      if(!hasA&&hasB) return 1;
+
       const ga=Number((a.gradeInfo||gm.get(studentKey(a)))?.gradeValue);
       const gb=Number((b.gradeInfo||gm.get(studentKey(b)))?.gradeValue);
-      if(Number.isFinite(ga)&&Number.isFinite(gb)) return ga-gb;
-      if(Number.isFinite(ga)) return -1;
-      if(Number.isFinite(gb)) return 1;
-      return studentKey(a).localeCompare(studentKey(b),"ko");
+      if(Number.isFinite(ga)&&Number.isFinite(gb)&&ga!==gb) return ga-gb;
+      if(Number.isFinite(ga)&&!Number.isFinite(gb)) return -1;
+      if(!Number.isFinite(ga)&&Number.isFinite(gb)) return 1;
+
+      return schoolNo(a).localeCompare(schoolNo(b),"ko");
     });
 
     for(const r of unique){
